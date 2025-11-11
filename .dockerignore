@@ -1,0 +1,15 @@
+node_modules
+client/node_modules
+server/node_modules
+npm-debug.log
+**/*.log
+.git
+.gitignore
+.DS_Store
+Thumbs.db
+dist
+client/dist
+server/logs
+docker-compose.yml
+docker-compose.override.yml
+

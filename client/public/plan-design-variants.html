@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>方案列表排版探索</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #eef3fb;
+    }
+
+    body {
+      margin: 0;
+      padding: 40px;
+      background: linear-gradient(180deg, #f5f7fe 0%, #eef2ff 100%);
+      color: #1a2233;
+    }
+
+    h1 {
+      margin: 0 0 24px;
+      text-align: center;
+      font-size: 32px;
+    }
+
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 28px;
+    }
+
+    .variant {
+      border-radius: 18px;
+      background: #fff;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .variant::before {
+      content: attr(data-title);
+      position: absolute;
+      top: 16px;
+      right: 24px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.24em;
+      color: rgba(26, 34, 51, 0.18);
+      text-transform: uppercase;
+    }
+
+    .tag-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .match-line {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      color: #475569;
+      font-size: 14px;
+    }
+
+    .match-line strong {
+      font-size: 15px;
+      color: #1e293b;
+    }
+
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.4;
+      color: #111827;
+    }
+
+    .summary {
+      color: #637083;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #0369a1;
+      background: rgba(3, 105, 161, 0.12);
+    }
+
+    .expert {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .expert img {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      object-fit: cover;
+    }
+
+    .expert-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 13px;
+    }
+
+    .price-chip {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 8px;
+      border-radius: 12px;
+      padding: 10px 18px;
+      background: rgba(79, 70, 229, 0.12);
+      color: #4338ca;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .price-chip span {
+      font-size: 22px;
+    }
+
+    .unlock-btn {
+      border: none;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .unlock-btn.primary {
+      background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(79, 70, 229, 0.28);
+    }
+
+    .unlock-btn.success {
+      background: rgba(34, 197, 94, 0.16);
+      color: #047857;
+      border: 1px solid rgba(34, 197, 94, 0.4);
+    }
+
+    .unlock-btn:hover {
+      transform: translateY(-2px);
+    }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, rgba(226, 232, 240, 0) 0%, rgba(148, 163, 184, 0.5) 50%, rgba(226, 232, 240, 0) 100%);
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      font-size: 13px;
+      color: #475569;
+    }
+
+    .meta-card {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(148, 163, 184, 0.08);
+    }
+
+    .meta-card span:first-child {
+      color: #1f2937;
+      font-weight: 600;
+    }
+
+    .vertical {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 18px;
+      align-items: center;
+    }
+
+    .accent-bar {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      background: conic-gradient(from 140deg, rgba(99, 102, 241, 0.16), transparent 35%);
+      mix-blend-mode: multiply;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 24px;
+      }
+      .gallery {
+        grid-template-columns: 1fr;
+      }
+      .vertical {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>方案列表单卡排版探索</h1>
+  <p style="text-align:center;margin-bottom:32px;color:#64748b;">同一组数据，不同布局，帮助挑选最适合百体汇的方案展示样式</p>
+
+  <div class="gallery">
+
+    <div class="variant" data-title="#01">
+      <div class="accent-bar"></div>
+      <span class="badge">AI深度方案</span>
+      <div class="match-line">
+        <strong>唐卡斯特 vs 布拉德福德</strong>
+        <span>·</span>
+        <span>11/11 20:45</span>
+        <span>·</span>
+        <span>英锦赛</span>
+      </div>
+      <div class="title">唐卡斯特连胜势头能否延续？AI深度拆解英锦赛焦点战</div>
+      <div class="summary">🔒 唐卡斯特近期主场表现强势，但后防线依旧存在跟防问题；布拉德福德客场策略趋于保守，本场恐以稳守反击为主……</div>
+      <div class="divider"></div>
+      <div class="expert">
+        <img src="https://api.dicebear.com/7.x/miniavs/svg?seed=老K主任" alt="老K主任">
+        <div class="expert-info">
+          <span style="font-weight:700;">老K主任 <span style="color:#3b82f6;">72%胜率</span></span>
+          <span style="color:#94a3b8;">近10场：7胜3负 · S级专家</span>
+        </div>
+      </div>
+      <button class="unlock-btn primary">
+        <span class="unlock-price">48 K币</span>
+        <span class="unlock-label">解锁查看策略</span>
+      </button>
+    </div>
+
+    <div class="variant" data-title="#02">
+      <div class="match-meta" style="gap:16px;">
+        <div class="meta-card">
+          <span>比赛时间</span>
+          <span>11/11 20:45</span>
+        </div>
+        <div class="meta-card">
+          <span>联赛</span>
+          <span>英锦赛</span>
+        </div>
+      </div>
+      <div class="title">盘口异动：唐卡斯特主胜是否被高估？</div>
+      <div class="match-line">
+        <strong>唐卡斯特</strong>
+        <span style="color:#e2e8f0;">⏐</span>
+        <span>vs</span>
+        <span style="color:#e2e8f0;">⏐</span>
+        <strong>布拉德福德</strong>
+      </div>
+      <div class="summary">🔒 初盘从-0.25升至-0.5，代表市场对主队信心持续累积，但结合实际伤停与状态，AI建议保持谨慎乐观……</div>
+      <div class="expert">
+        <img src="https://api.dicebear.com/7.x/miniavs/svg?seed=盘口见闻录" alt="盘口见闻录">
+        <div class="expert-info">
+          <span style="font-weight:700;">盘口见闻录</span>
+          <span class="badge" style="background:rgba(234,88,12,0.12);color:#ea580c;">近10场 6胜4负</span>
+        </div>
+      </div>
+      <div class="price-chip">
+        <span>42</span> K币
+      </div>
+      <button class="unlock-btn success">已解锁</button>
+    </div>
+
+    <div class="variant" data-title="#03">
+      <div class="vertical">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="padding:12px;border-radius:16px;background:rgba(99,102,241,0.12);color:#4338ca;font-weight:700;text-align:center;">11/11 20:45</div>
+          <div style="padding:12px;border-radius:16px;background:rgba(20,184,166,0.12);color:#0f766e;font-weight:600;text-align:center;">英锦赛</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#475569;">
+            <strong style="font-size:18px;">唐卡斯特</strong>
+            <span style="opacity:0.7;">VS</span>
+            <strong style="font-size:18px;">布拉德福德</strong>
+          </div>
+          <div class="title" style="font-size:22px;">老K主任观点：布拉德福德客场能否带走积分？</div>
+          <div class="summary">🔒 唐卡斯特连胜背景下，盘口并未大幅拉升，说明主流资金仍保持克制……</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="expert">
+          <img src="https://api.dicebear.com/7.x/miniavs/svg?seed=老K主任" alt="老K主任">
+          <div class="expert-info">
+            <span style="font-weight:600;">老K主任</span>
+            <span style="color:#475569;">胜率 72% · 近10场 7胜3负</span>
+          </div>
+        </div>
+        <div class="price-chip" style="background:rgba(251,146,60,0.15);color:#ea580c;">
+          <span>58</span> K币
+        </div>
+      </div>
+    </div>
+
+    <div class="variant" data-title="#04" style="background:#111827;color:#f8fafc;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-weight:700;font-size:13px;color:#38bdf8;">今日焦点</span>
+        <span style="opacity:0.6;">11/11 20:45 · 英锦赛</span>
+      </div>
+      <div class="title" style="color:#e0f2fe;">AI专栏：唐卡斯特主场能否再下一城？</div>
+      <div class="match-line" style="color:#cbd5f5;">
+        <strong style="color:#38bdf8;">唐卡斯特</strong>
+        <span>VS</span>
+        <strong style="color:#facc15;">布拉德福德</strong>
+      </div>
+      <div class="summary" style="color:#94a3b8;">🔒 AI综合盘口变动、阵容及赔率，倾向主队不败，建议搭配小球组合……</div>
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div class="expert">
+          <img src="https://api.dicebear.com/7.x/miniavs/svg?seed=篮途先生" alt="篮途先生">
+          <div class="expert-info">
+            <span style="font-weight:700;color:#e0f2fe;">篮途先生</span>
+            <span style="color:#38bdf8;">78% 胜率 · NBA专栏</span>
+          </div>
+        </div>
+        <button class="unlock-btn primary" style="background:linear-gradient(135deg,#38bdf8 0%,#2563eb 100%);">
+          <span class="unlock-price">68 K币</span>
+          <span class="unlock-label">付费解锁</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="variant" data-title="#05">
+      <div class="match-meta" style="justify-content:space-between;">
+        <div>
+          <span style="font-size:13px;color:#475569;">比赛时间</span>
+          <div style="font-size:18px;font-weight:700;color:#111827;">11/11 20:45</div>
+        </div>
+        <div>
+          <span style="font-size:13px;color:#475569;">对阵</span>
+          <div style="font-size:18px;font-weight:700;color:#111827;">唐卡斯特 vs 布拉德福德</div>
+        </div>
+      </div>
+      <div class="title">盘口下调意味着机会？布拉德福德客战分析</div>
+      <div class="summary">🔒 唐卡斯特近期依赖定位球得分，布拉德福德侧重压制中场，本场对阵或出现胶着局面……</div>
+      <div class="divider"></div>
+      <div class="expert">
+        <img src="https://api.dicebear.com/7.x/miniavs/svg?seed=英伦客" alt="英伦客">
+        <div class="expert-info">
+          <span style="font-weight:600;">英伦客</span>
+          <span style="color:#64748b;">胜率 63% · 英伦观察员</span>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="price-chip" style="background:rgba(14,165,233,0.15);color:#0ea5e9;">
+          <span>52</span> K币
+        </div>
+        <button class="unlock-btn success">已解锁</button>
+      </div>
+    </div>
+
+    <div class="variant" data-title="#06">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="badge" style="background:rgba(239,68,68,0.12);color:#ef4444;">精选方案</span>
+        <span style="font-size:13px;color:#475569;">11/11 20:45 · 英锦赛</span>
+      </div>
+      <div class="title">“老k看不准” 特兰米尔主场能否逆袭？</div>
+      <div class="summary">🔒 特兰米尔近期主场走势起伏，布莱克浦客场体能存疑，建议关注大球方向……</div>
+      <div class="match-line">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <strong>特兰米尔</strong>
+          <span style="font-size:12px;color:#94a3b8;">主</span>
+        </div>
+        <span style="opacity:0.6;">VS</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <strong>布莱克浦</strong>
+          <span style="font-size:12px;color:#94a3b8;">客</span>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="expert" style="justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <img src="https://api.dicebear.com/7.x/miniavs/svg?seed=飞刀哥" alt="飞刀哥">
+          <div class="expert-info">
+            <span style="font-weight:600;">飞刀哥</span>
+            <span style="color:#64748b;">胜率 65% · 近10场 5胜5负</span>
+          </div>
+        </div>
+        <button class="unlock-btn primary" style="padding:10px 18px;">
+          <span class="unlock-price" style="font-size:16px;">58 K币</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="variant" data-title="#07">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-weight:700;color:#6366f1;">英锦赛 · 11/11 20:45</span>
+        <span class="badge" style="background:rgba(14,165,233,0.12);color:#0284c7;">AI推荐</span>
+      </div>
+      <div class="title">国王背靠背能否阻击掘金？AI多源数据给出答案</div>
+      <div class="match-line">
+        <strong>萨克拉门托国王</strong>
+        <span style="opacity:0.6;">vs</span>
+        <strong>丹佛掘金</strong>
+      </div>
+      <div class="summary">🔓 国王防守效率提升，但掘金内线高度仍让人担忧，本场倾向掘金客场小胜……</div>
+      <div class="divider"></div>
+      <div style="display:flex;gap:16px;align-items:center;">
+        <img src="https://api.dicebear.com/7.x/miniavs/svg?seed=篮途先生" alt="篮途先生" style="width:52px;height:52px;border-radius:16px;">
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <span style="font-weight:700;">篮途先生</span>
+          <span class="badge" style="background:rgba(52,211,153,0.12);color:#10b981;">胜率 78%</span>
+        </div>
+      </div>
+      <button class="unlock-btn primary">
+        <span class="unlock-price">68 K币</span>
+        <span class="unlock-label">立即解锁</span>
+      </button>
+    </div>
+
+    <div class="variant" data-title="#08">
+      <div class="match-line" style="justify-content:space-between;">
+        <span>11/11 20:45</span>
+        <span>英锦赛</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:54px;height:54px;border-radius:18px;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-weight:700;color:#f59e0b;">VS</div>
+        <div style="display:flex;flex-direction:column;gap:4px;font-size:15px;">
+          <strong>唐卡斯特</strong>
+          <strong>布拉德福德</strong>
+        </div>
+      </div>
+      <div class="title">盘口临场持续下调，暗示国王存在机会？</div>
+      <div class="summary">🔒 市场资金大量流入主队，但AI对赔率与实际状态的匹配度提出疑问……</div>
+      <div class="expert">
+        <img src="https://api.dicebear.com/7.x/miniavs/svg?seed=盘口见闻录" alt="盘口见闻录">
+        <div class="expert-info">
+          <span style="font-weight:600;">盘口见闻录</span>
+          <span style="color:#64748b;">胜率 68% · 盘口洞察</span>
+        </div>
+      </div>
+      <div class="price-chip" style="background:rgba(244,114,182,0.15);color:#db2777;">
+        <span>60</span>K币
+      </div>
+      <button class="unlock-btn primary" style="background:linear-gradient(135deg,#f97316 0%,#fb7185 100%);">
+        <span class="unlock-price">付费解锁</span>
+      </button>
+    </div>
+
+    <div class="variant" data-title="#09">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;justify-content:space-between;">
+          <span style="font-weight:600;">英锦赛</span>
+          <span style="color:#475569;">11/11 20:45</span>
+        </div>
+        <div class="title" style="font-size:21px;">维冈客战不稳？斯托克港能否稳住晋级主动权</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="badge" style="background:rgba(139,92,246,0.15);color:#6d28d9;">深度拆解</span>
+          <span style="color:#475569;">斯托克港 vs 维冈竞技</span>
+        </div>
+      </div>
+      <div class="summary">🔒 维冈近期遭遇进攻瓶颈，客场防线易被拉开，斯托克港主场稳定性更好……</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="expert">
+          <img src="https://api.dicebear.com/7.x/miniavs/svg?seed=英伦客" alt="英伦客">
+          <div class="expert-info">
+            <span style="font-weight:600;">英伦客</span>
+            <span style="color:#64748b;">胜率 63%</span>
+          </div>
+        </div>
+        <button class="unlock-btn primary">
+          <span class="unlock-price">52 K币</span>
+          <span class="unlock-label">解锁阅读</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="variant" data-title="#10">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span style="font-size:13px;color:#475569;">比赛时间</span>
+          <span style="font-size:18px;font-weight:700;">11/11 20:45</span>
+        </div>
+        <span class="badge" style="background:rgba(236,72,153,0.12);color:#db2777;">AI模型输出</span>
+      </div>
+      <div class="title">AI 多源数据：唐卡斯特 vs 布拉德福德 投注策略</div>
+      <div class="summary">🔒 AI结合阵容、指数、舆情给出推荐，倾向主队小胜并建议搭配2-3球区间……</div>
+      <div class="meta-grid">
+        <div class="meta-card">
+          <span>主队状态</span>
+          <span>主场 4 连胜 · 场均 2.4 球</span>
+        </div>
+        <div class="meta-card">
+          <span>客队状态</span>
+          <span>客场近 5 场 1 胜 · 攻防低迷</span>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="expert">
+          <img src="https://api.dicebear.com/7.x/miniavs/svg?seed=老K主任" alt="老K主任">
+          <div class="expert-info">
+            <span style="font-weight:600;">老K主任</span>
+            <span style="color:#64748b;">胜率 72%</span>
+          </div>
+        </div>
+        <button class="unlock-btn primary">
+          <span class="unlock-price">48 K币</span>
+          <span class="unlock-label">立即解锁</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
+

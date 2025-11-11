@@ -1,0 +1,88 @@
+.time {
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.league-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgba(58, 107, 255, 0.16);
+  color: #2f54e3;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  width: fit-content;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.teams-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+}
+
+.team {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: #2c3e50;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.team.home {
+  justify-content: flex-start;
+}
+
+.team.away {
+  justify-content: flex-end;
+  text-align: right;
+  flex-direction: row;
+}
+
+.team-logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(58, 107, 255, 0.08);
+  padding: 3px;
+  box-shadow: inset 0 0 0 1px rgba(58, 107, 255, 0.12);
+}
+
+.team-name {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.vs {
+  flex: 0 0 auto;
+  color: #94a0b5;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+}
+
+@media (max-width: 768px) {
+  .teams-line {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .team.home,
+  .team.away {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .team-logo {
+    width: 28px;
+    height: 28px;
+  }
+}
+

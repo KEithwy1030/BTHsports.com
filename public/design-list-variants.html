@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>比赛列表风格 · 选择预览</title>
+    <style>
+      :root {
+        --bg: #f3f6fb;
+        --surface: #ffffff;
+        --primary: #3a6bff;
+        --muted: #8d9ab5;
+        --divider: #e3e8f5;
+        font-family: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      }
+
+      body {
+        background: var(--bg);
+        margin: 0;
+        color: #1f2a44;
+      }
+
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: clamp(20px, 4vw, 56px);
+        display: grid;
+        gap: 32px;
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: clamp(26px, 3.4vw, 38px);
+        letter-spacing: 0.04em;
+      }
+
+      header p {
+        margin: 10px 0 0;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      section {
+        background: var(--surface);
+        border-radius: 22px;
+        border: 1px solid var(--divider);
+        padding: clamp(20px, 3.6vw, 32px);
+        display: grid;
+        gap: 20px;
+        box-shadow: 0 18px 34px rgba(31, 42, 68, 0.08);
+      }
+
+      section h2 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .list-style {
+        display: grid;
+        gap: 14px;
+      }
+
+      .match-card {
+        border: 1px solid #eff2fb;
+        border-radius: 18px;
+        padding: 16px 20px;
+        background: #f9fbff;
+        display: grid;
+        gap: 12px;
+      }
+
+      .match-card[data-state="live"] {
+        border-color: rgba(58, 107, 255, 0.4);
+        box-shadow: 0 12px 22px rgba(58, 107, 255, 0.15);
+      }
+
+      .time-line {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .time-line strong {
+        font-size: 20px;
+        color: #1f2a44;
+        letter-spacing: 0.08em;
+      }
+
+      .league-badge {
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: rgba(58, 107, 255, 0.12);
+        color: var(--primary);
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .teams-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .team {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 600;
+      }
+
+      .team--away {
+        flex-direction: row-reverse;
+        text-align: right;
+      }
+
+      .team-logo {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: rgba(58, 107, 255, 0.08);
+        object-fit: cover;
+        padding: 4px;
+      }
+
+      .vs {
+        font-size: 12px;
+        letter-spacing: 0.4em;
+        color: var(--muted);
+      }
+
+      .extras {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .articles {
+        display: grid;
+        gap: 6px;
+        font-size: 13px;
+      }
+
+      .articles a {
+        color: var(--primary);
+        text-decoration: none;
+      }
+
+      .articles a:hover {
+        text-decoration: underline;
+      }
+
+      .article-empty {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .cta {
+        padding: 8px 18px;
+        border-radius: 999px;
+        border: none;
+        background: var(--primary);
+        color: #fff;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        cursor: pointer;
+        box-shadow: 0 10px 20px rgba(58, 107, 255, 0.2);
+      }
+
+      /* Style adjustments */
+      .style-2 .match-card {
+        padding: 18px 22px;
+        background: #ffffff;
+        border: 1px solid var(--divider);
+      }
+
+      .style-2 .time-line {
+        justify-content: space-between;
+      }
+
+      .style-2 .extras {
+        justify-content: flex-end;
+        gap: 18px;
+      }
+
+      .style-3 .list-style {
+        gap: 20px;
+      }
+
+      .style-3 .match-card {
+        background: linear-gradient(135deg, #f4f7ff, #ffffff);
+        padding: 22px 24px;
+        position: relative;
+      }
+
+      .style-3 .match-card::before {
+        content: attr(data-state);
+        position: absolute;
+        top: 18px;
+        right: 24px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        color: #fff;
+        background: rgba(58, 107, 255, 0.6);
+        text-transform: uppercase;
+      }
+
+      .style-4 .match-card {
+        display: grid;
+        grid-template-columns: 160px minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+        background: #ffffff;
+      }
+
+      .style-4 .extras {
+        justify-content: flex-start;
+        gap: 14px;
+      }
+
+      .style-4 .cta {
+        background: #eef2ff;
+        color: var(--primary);
+        box-shadow: none;
+      }
+
+      .style-5 .match-card {
+        padding: 16px;
+        border: 1px dashed var(--divider);
+      }
+
+      .style-5 .list-style {
+        gap: 12px;
+      }
+
+      .style-5 .cta {
+        padding: 8px 16px;
+      }
+
+      .style-5 .extras {
+        justify-content: center;
+        gap: 14px;
+      }
+
+      @media (max-width: 768px) {
+        .teams-row {
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .team--away {
+          flex-direction: column;
+          text-align: center;
+        }
+
+        .style-4 .match-card {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .extras {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>比赛列表模板 · 5 个风格</h1>
+        <p>示例包含联赛标签、完整开赛时间、专家头像入口、操作按钮。可根据需要选择或混搭。</p>
+      </header>
+
+      <section class="style-1">
+        <h2>List Style 01 · 经典卡片</h2>
+        <div class="list-style">
+          <div class="match-card" data-state="live">
+            <div class="time-line">
+              <strong>15:30</strong>
+              <span>2025/11/10 · 周一</span>
+              <span class="league-badge">英超</span>
+            </div>
+            <div class="teams-row">
+              <div class="team">
+                <img class="team-logo" src="https://dummyimage.com/80x80/89c4ff/ffffff.png&text=MC" alt="曼城">
+                <span>曼城</span>
+              </div>
+              <span class="vs">VS</span>
+              <div class="team team--away">
+                <span>阿森纳</span>
+                <img class="team-logo" src="https://dummyimage.com/80x80/f6b8b8/ffffff.png&text=AR" alt="阿森纳">
+              </div>
+            </div>
+            <div class="extras">
+              <div class="articles">
+                <a href="javascript:void(0)">赛前情报：蓝月亮临场调整</a>
+                <a href="javascript:void(0)">战术拆解：瓜帅限制萨卡</a>
+              </div>
+              <button class="cta">进入直播</button>
+            </div>
+          </div>
+          <div class="match-card" data-state="live">
+            <div class="time-line">
+              <strong>16:10</strong>
+              <span>2025/11/10 · 周一</span>
+              <span class="league-badge">德甲</span>
+            </div>
+            <div class="teams-row">
+              <div class="team">
+                <img class="team-logo" src="https://dummyimage.com/80x80/fad97a/ffffff.png&text=FCB" alt="拜仁">
+                <span>拜仁</span>
+              </div>
+              <span class="vs">VS</span>
+              <div class="team team--away">
+                <span>多特蒙德</span>
+                <img class="team-logo" src="https://dummyimage.com/80x80/fce25a/ffffff.png&text=BVB" alt="多特蒙德">
+              </div>
+            </div>
+            <div class="extras">
+              <div class="articles">
+                <a href="javascript:void(0)">国家德比焦点：中场对抗</a>
+              </div>
+              <button class="cta">进入直播</button>
+            </div>
+          </div>
+          <div class="match-card" data-state="upcoming">
+            <div class="time-line">
+              <strong>19:30</strong>
+              <span>2025/11/10 · 周一</span>
+              <span class="league-badge">NBA</span>
+            </div>
+            <div class="teams-row">
+              <div class="team">
+                <img class="team-logo" src="https://dummyimage.com/80x80/d4b4ff/ffffff.png&text=LAL" alt="湖人">
+                <span>湖人</span>
+              </div>
+              <span class="vs">VS</span>
+              <div class="team team--away">
+                <span>勇士</span>
+                <img class="team-logo" src="https://dummyimage.com/80x80/8ed1ff/ffffff.png&text=GSW" alt="勇士">
+              </div>
+            </div>
+            <div class="extras">
+              <div class="articles">
+                <a href="javascript:void(0)">詹库对决：节奏与瞬间</a>
+              </div>
+              <button class="cta">预约提醒</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="style-2">
+        <h2>List Style 02 · 条形清单</h2>
+        <div class="list-style">
+          <div class="match-card" data-state="live">
+            <div class="time-line">
+              <div>
+                <strong>15:30</strong>
+                <span> · 2025/11/10</span>
+              </div>
+              <span class="league-badge">英超</span>
+            </div>
+            <div class="teams-row">
+              <div class="team">
+                <img class="team-logo" src="https://dummyimage.com/80x80/89c4ff/ffffff.png&text=MC" alt="曼城">
+                <span>曼城</span>
+              </div>
+              <span class="vs">VS</span>
+              <div class="team team--away">
+                <span>阿森纳</span>
+                <img class="team-logo" src="https://dummyimage.com/80x80/f6b8b8/ffffff.png&text=AR" alt="阿森纳">
+              </div>
+            </div>
+            <div class="extras">
+              <div class="articles">
+                <a href="javascript:void(0)">蓝月亮门将变阵分析</a>
+              </div>
+              <button class="cta">进入直播</button>
+            </div>
+          </div>
+          <div class="match-card" data-state="upcoming">
+            <div class="time-line">
+              <div>
+                <strong>20:15</strong>
+                <span> · 2025/11/10</span>
+              </div>
+              <span class="league-badge">欧冠</span>
+            </div>
+            <div class="teams-row">
+              <div class="team">
+                <img class="team-logo" src="https://dummyimage.com/80x80/90c5ff/ffffff.png&text=PSG" alt="巴黎">
+                <span>巴黎</span>
+              </div>
+              <span class="vs">VS</span>
+              <div class="team team--away">
+                <span>皇马</span>
+                <img class="team-logo" src="https://dummyimage.com/80x80/f8e6a0/ffffff.png&text=RM" alt="皇马">
+              </div>
+            </div>
+            <div class="extras">
+              <button class="cta">预约提醒</button>
+              <div class="articles">
+                <a href="javascript:void(0)">皇马客场名单速览</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="style-3">
+        <h2>List Style 03 · 左右分栏</h2>
+        <div class="list-style">
+          <div class="match-card" data-state="LIVE">
+            <div class="teams-row">
+              <div class="team">
+                <img class="team-logo" src="https://dummyimage.com/80x80/89c4ff/ffffff.png&text=MC" alt="曼城">
+                <span>曼城</span>
+              </div>
+              <span class="vs">VS</span>
+              <div class="team team--away">
+                <span>阿森纳</span>
+                <img class="team-logo" src="https://dummyimage.com/80x80/f6b8b8/ffffff.png&text=AR" alt="阿森纳">
+              </div>
+            </div>
+            <div class="extras">
+              <div class="time-line">
+                <strong>15:30</strong>
+                <span>2025/11/10</span>
+                <span class="league-badge">英超</span>
+              </div>
+              <button class="cta">进入直播</button>
+            </div>
+          </div>
+          <div class="match-card" data-state="UPCOMING">
+            <div class="teams-row">
+              <div class="team">
+                <img class="team-logo" src="https://dummyimage.com/80x80/ffe7a2/ffffff.png&text=JUV" alt="尤文图斯">
+                <span>尤文图斯</span>
+              </div>
+              <span class="vs">VS</span>
+              <div class="team team--away">
+                <span>国际米兰</span>
+                <img class="team-logo" src="https://dummyimage.com/80x80/bad7ff/ffffff.png&text=INT" alt="国际米兰">
+              </div>
+            </div>
+            <div class="extras">
+              <div class="time-line">
+                <strong>22:00</strong>
+                <span>2025/11/10</span>
+                <span class="league-badge">意甲</span>
+              </div>
+              <button class="cta">预约提醒</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="style-4">
+        <h2>List Style 04 · 信息双栏</h2>
+        <div class="list-style">
+          <div class="match-card" data-state="live">
+            <div class="time-line">
+              <strong>15:30</strong>
+              <span class="league-badge">英超</span>
+              <span>2025/11/10 · 周一</span>
+            </div>
+            <div>
+              <div class="teams-row">
+                <div class="team">
+                  <img class="team-logo" src="https://dummyimage.com/80x80/89c4ff/ffffff.png&text=MC" alt="曼城">
+                  <span>曼城</span>
+                </div>
+                <span class="vs">VS</span>
+                <div class="team team--away">
+                  <span>阿森纳</span>
+                  <img class="team-logo" src="https://dummyimage.com/80x80/f6b8b8/ffffff.png&text=AR" alt="阿森纳">
+                </div>
+              </div>
+              <div class="extras">
+              <div class="articles">
+                <a href="javascript:void(0)">蓝月亮门将变阵分析</a>
+              </div>
+                <button class="cta">进入直播</button>
+              </div>
+            </div>
+          </div>
+          <div class="match-card" data-state="upcoming">
+            <div class="time-line">
+              <strong>02:00</strong>
+              <span class="league-badge">NBA</span>
+              <span>2025/11/11 · 周二</span>
+            </div>
+            <div>
+              <div class="teams-row">
+                <div class="team">
+                  <img class="team-logo" src="https://dummyimage.com/80x80/fcd8a9/ffffff.png&text=DEN" alt="掘金">
+                  <span>掘金</span>
+                </div>
+                <span class="vs">VS</span>
+                <div class="team team--away">
+                  <span>凯尔特人</span>
+                  <img class="team-logo" src="https://dummyimage.com/80x80/9fd8a4/ffffff.png&text=BOS" alt="凯尔特人">
+                </div>
+              </div>
+              <div class="extras">
+                <button class="cta">预约提醒</button>
+              <div class="articles">
+                <a href="javascript:void(0)">掘金连胜走势观察</a>
+              </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="style-5">
+        <h2>List Style 05 · 极简列表</h2>
+        <div class="list-style">
+          <div class="match-card" data-state="live">
+            <div class="time-line">
+              <strong>15:30</strong>
+              <span class="league-badge">英超</span>
+            </div>
+            <div class="teams-row">
+              <div class="team">
+                <img class="team-logo" src="https://dummyimage.com/80x80/89c4ff/ffffff.png&text=MC" alt="曼城">
+                <span>曼城</span>
+              </div>
+              <span class="vs">VS</span>
+              <div class="team team--away">
+                <span>阿森纳</span>
+                <img class="team-logo" src="https://dummyimage.com/80x80/f6b8b8/ffffff.png&text=AR" alt="阿森纳">
+              </div>
+            </div>
+            <div class="extras">
+              <div class="articles">
+                <a href="javascript:void(0)">攻防节奏与对位预测</a>
+              </div>
+              <button class="cta">进入直播</button>
+            </div>
+          </div>
+          <div class="match-card" data-state="upcoming">
+            <div class="time-line">
+              <strong>21:00</strong>
+              <span class="league-badge">法甲</span>
+            </div>
+            <div class="teams-row">
+              <div class="team">
+                <img class="team-logo" src="https://dummyimage.com/80x80/96e4ff/ffffff.png&text=LYO" alt="里昂">
+                <span>里昂</span>
+              </div>
+              <span class="vs">VS</span>
+              <div class="team team--away">
+                <span>马赛</span>
+                <img class="team-logo" src="https://dummyimage.com/80x80/dde3ff/ffffff.png&text=OM" alt="马赛">
+              </div>
+            </div>
+            <div class="extras">
+              <button class="cta">预约提醒</button>
+              <div class="articles">
+                <span class="article-empty">暂无相关文章</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
+

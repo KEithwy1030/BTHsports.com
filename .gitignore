@@ -1,0 +1,96 @@
+# Dependencies
+node_modules/
+**/node_modules/
+Live_show_src_*/
+
+# Build outputs
+dist/
+build/
+**/dist/
+**/build/
+public/assets/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+env.dev
+env.prod
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Test files
+test_*.js
+**/test_*.js
+*.test.js
+*.spec.js
+
+# Temporary files
+*.tmp
+*.temp
+*.backup
+*.bak
+*.swp
+*.swo
+*~
+
+# Coverage directory
+coverage/
+*.lcov
+.nyc_output
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache directories
+.cache/
+.parcel-cache/
+.npm/
+.eslintcache
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Local data files (keep structure, ignore content if needed)
+# server/data/*.json
+# matches_data.json
+

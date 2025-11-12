@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
+const cron = require('node-cron');
 
 (() => {
   const projectRoot = path.join(__dirname, '..');
@@ -30,8 +31,9 @@ const dotenv = require('dotenv');
 })();
 
 // CORS 配置：支持 Zeabur 自动注入
-// 如果未设置 CORS_ORIGINS，开发环境使用 localhost，生产环境允许所有来源
-const DEFAULT_CORS_ORIGINS = process.env.NODE_ENV === 'production' 
+// 生产环境允许所有来源，开发环境使用白名单
+const isProduction = process.env.NODE_ENV === 'production';
+const DEFAULT_CORS_ORIGINS = isProduction 
   ? '*' 
   : 'http://localhost:7000,http://127.0.0.1:7000';
 const allowedOrigins = (process.env.CORS_ORIGINS || DEFAULT_CORS_ORIGINS)
@@ -56,9 +58,28 @@ app.set('signalRefresher', signalRefresher);
 // 中间件
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowAllOrigins || allowedOrigins.includes(origin)) {
+    // 生产环境：直接允许所有来源
+    if (isProduction) {
       return callback(null, true);
     }
+    
+    // 开发环境：进行白名单检查
+    // 允许没有 origin 的请求（如 Postman、curl 等）
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // 检查是否允许所有来源（开发环境也可能设置 *）
+    if (allowAllOrigins) {
+      return callback(null, true);
+    }
+    
+    // 检查是否在白名单中
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // 不在白名单中，拒绝请求
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true
@@ -127,7 +148,18 @@ if (fs.existsSync(publicPath)) {
   console.log('📁 使用公共资源目录:', publicPath);
 }
 
+// 用户上传文件目录（头像等）
+const uploadsPath = path.join(publicPath, 'uploads');
+if (fs.existsSync(uploadsPath)) {
+  app.use('/uploads', express.static(uploadsPath));
+  console.log('📁 用户上传文件目录:', uploadsPath);
+}
+
 // API 路由
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/user', require('./routes/user'));
+app.use('/api/follow', require('./routes/follow'));
+app.use('/api/chat', require('./routes/chat').router);
 app.use('/api/matches', require('./routes/matches'));
 app.use('/api/live', require('./routes/live'));
 app.use('/api/crawler', require('./routes/crawler'));
@@ -182,6 +214,18 @@ app.listen(PORT, () => {
     console.log(`✅ 首次爬取完成，获取到 ${matches.length} 场比赛`);
   }).catch(error => {
     console.error('❌ 首次爬取失败:', error.message);
+  });
+
+  // 启动聊天记录清理定时任务（每小时执行一次）
+  console.log('🧹 启动聊天记录清理定时任务...');
+  const { cleanupExpiredChatMessages } = require('./routes/chat');
+  
+  // 立即执行一次清理
+  cleanupExpiredChatMessages();
+  
+  // 每小时执行一次清理
+  cron.schedule('0 * * * *', () => {
+    cleanupExpiredChatMessages();
   });
 });
 

@@ -65,21 +65,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// 静态文件服务 - 支持前端构建产物和公共资源
-// 优先使用 client/dist（生产环境），其次使用 public（开发环境）
-const clientDistPath = path.join(__dirname, '../client/dist');
-const publicPath = path.join(__dirname, '../public');
-
-if (fs.existsSync(clientDistPath)) {
-  app.use(express.static(clientDistPath));
-  console.log('📦 使用前端构建产物:', clientDistPath);
-}
-if (fs.existsSync(publicPath)) {
-  app.use(express.static(publicPath));
-  console.log('📁 使用公共资源目录:', publicPath);
-}
-
-// 路由
+// 路由（必须在静态文件服务之前）
 app.use('/api/matches', require('./routes/matches'));
 app.use('/api/live', require('./routes/live'));
 app.use('/api/crawler', require('./routes/crawler'));
@@ -93,10 +79,38 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// SPA 路由支持 - 所有非 API 路由返回 index.html（Vue Router 处理）
+// 静态文件服务 - 支持前端构建产物和公共资源
+// 必须在 API 路由之后、SPA 路由之前
+const clientDistPath = path.join(__dirname, '../client/dist');
+const publicPath = path.join(__dirname, '../public');
+
+// 优先使用 client/dist（生产环境）
+if (fs.existsSync(clientDistPath)) {
+  // 静态资源（assets、icon 等）优先匹配
+  app.use('/assets', express.static(path.join(clientDistPath, 'assets')));
+  app.use('/icon', express.static(path.join(clientDistPath, 'icon')));
+  app.use('/teams', express.static(path.join(clientDistPath, 'teams')));
+  // 其他静态文件
+  app.use(express.static(clientDistPath));
+  console.log('📦 使用前端构建产物:', clientDistPath);
+}
+
+// 其次使用 public（开发环境或备用）
+if (fs.existsSync(publicPath)) {
+  app.use(express.static(publicPath));
+  console.log('📁 使用公共资源目录:', publicPath);
+}
+
+// SPA 路由支持 - 所有非 API 和非静态资源路由返回 index.html（Vue Router 处理）
 app.get('*', (req, res, next) => {
-  // 跳过 API 路由和静态资源
-  if (req.path.startsWith('/api') || req.path.includes('.')) {
+  // 跳过 API 路由
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  
+  // 跳过静态资源（已有文件扩展名）
+  const ext = path.extname(req.path);
+  if (ext && ext !== '.html') {
     return next();
   }
   

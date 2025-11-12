@@ -103,14 +103,14 @@ class StreamCrawler {
     };
   }
 
-  // 初始化浏览器
+  // 初始化浏览器（已禁用 - Zeabur 环境不支持）
   async initBrowser() {
-    if (!this.browser) {
-      this.browser = await chromium.launch({
-        headless: true
-      });
-    }
-    return this.browser;
+    // 浏览器功能在云环境（Zeabur）中不可用
+    // 原因：1. 容器中没有 Chrome/Chromium
+    //       2. 资源消耗大（内存、CPU）
+    //       3. 成本高且不稳定
+    console.warn('⚠️ 浏览器自动化功能已禁用（云环境不支持）');
+    return null;
   }
 
   // 关闭浏览器
@@ -384,9 +384,38 @@ class StreamCrawler {
     }
   }
 
-  // 新增方法：使用浏览器自动化获取真实视频流
+  // 检查是否启用浏览器功能
+  isBrowserEnabled() {
+    // 云环境（Zeabur）默认禁用浏览器功能
+    if (process.env.ENABLE_BROWSER === 'true') {
+      return true;
+    }
+    // 检查是否有可用的 Chrome/Chromium
+    const fs = require('fs');
+    const chromePaths = [
+      process.env.CHROME_PATH,
+      '/usr/bin/chromium-browser',
+      '/usr/bin/google-chrome'
+    ].filter(Boolean);
+    
+    return chromePaths.some(path => {
+      try {
+        return fs.existsSync(path);
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  // 新增方法：使用浏览器自动化获取真实视频流（云环境已禁用）
   async crawlRealVideoStreams(matchId) {
     console.log(`🔍 开始获取比赛 ${matchId} 的真实视频流...`);
+    
+    // 检查是否启用浏览器功能
+    if (!this.isBrowserEnabled()) {
+      console.warn('⚠️ 浏览器自动化功能已禁用（云环境不支持），跳过浏览器爬取');
+      return [];
+    }
     
     let browser;
     try {
@@ -414,6 +443,11 @@ class StreamCrawler {
             continue;
           }
         }
+      }
+      
+      if (!executablePath) {
+        console.warn('⚠️ 未找到可用的 Chrome/Chromium，跳过浏览器爬取');
+        return [];
       }
       
       browser = await puppeteer.launch({ 
@@ -1080,8 +1114,13 @@ class StreamCrawler {
     }
   }
 
-  // 从JRS80获取真实直播流
+  // 从JRS80获取真实直播流（云环境已禁用）
   async crawlJRS80RealStreams(matchId) {
+    if (!this.isBrowserEnabled()) {
+      console.warn('⚠️ 浏览器自动化功能已禁用（云环境不支持），跳过JRS80浏览器爬取');
+      return [];
+    }
+    
     try {
       console.log(`🎯 从JRS80获取比赛 ${matchId} 的真实直播流...`);
       
@@ -1150,8 +1189,13 @@ class StreamCrawler {
     }
   }
 
-  // 从popozhibo获取真实直播流
+  // 从popozhibo获取真实直播流（云环境已禁用）
   async crawlPopozhiboRealStreams(matchId) {
+    if (!this.isBrowserEnabled()) {
+      console.warn('⚠️ 浏览器自动化功能已禁用（云环境不支持），跳过popozhibo浏览器爬取');
+      return [];
+    }
+    
     try {
       console.log(`🎯 从popozhibo获取比赛 ${matchId} 的真实直播流...`);
       
@@ -1219,8 +1263,13 @@ class StreamCrawler {
     }
   }
 
-  // 从其他直播源获取真实流
+  // 从其他直播源获取真实流（云环境已禁用）
   async crawlOtherRealStreams(matchId) {
+    if (!this.isBrowserEnabled()) {
+      console.warn('⚠️ 浏览器自动化功能已禁用（云环境不支持），跳过其他直播源浏览器爬取');
+      return [];
+    }
+    
     try {
       console.log(`🎯 从其他直播源获取比赛 ${matchId} 的真实直播流...`);
       
@@ -2294,6 +2343,11 @@ class SmartStreamSourceFetcher {
   }
   
   async deepCrawlWithBrowser(matchId, matchInfo) {
+    if (!this.isBrowserEnabled()) {
+      console.warn('⚠️ 浏览器自动化功能已禁用（云环境不支持），跳过深度浏览器爬取');
+      return [];
+    }
+    
     try {
       console.log(`🔍 使用浏览器自动化深度抓取比赛 ${matchId} 的信号源...`);
       

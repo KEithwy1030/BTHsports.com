@@ -94,3 +94,16 @@ coverage/
 # server/data/*.json
 # matches_data.json
 
+# Server logs directory
+server/logs/
+**/logs/*.log
+
+# Build artifacts (should not be committed)
+client/dist/
+**/dist/
+
+# Package lock files (optional - some teams prefer to commit them)
+# Uncomment if you don't want to commit lock files
+# package-lock.json
+# **/package-lock.json
+

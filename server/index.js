@@ -65,7 +65,69 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// 路由（必须在静态文件服务之前）
+// 健康检查（最早处理）
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// 静态文件服务 - 必须在所有路由之前，确保静态资源优先匹配
+const clientDistPath = path.join(__dirname, '../client/dist');
+const publicPath = path.join(__dirname, '../public');
+
+// 检查并记录静态文件目录状态
+if (fs.existsSync(clientDistPath)) {
+  const assetsPath = path.join(clientDistPath, 'assets');
+  const indexPath = path.join(clientDistPath, 'index.html');
+  
+  console.log('📦 前端构建产物目录存在:', clientDistPath);
+  console.log('   assets 目录:', fs.existsSync(assetsPath) ? '存在' : '不存在');
+  console.log('   index.html:', fs.existsSync(indexPath) ? '存在' : '不存在');
+  
+  // 静态资源目录（明确指定，避免被 SPA 路由拦截）
+  if (fs.existsSync(assetsPath)) {
+    app.use('/assets', express.static(assetsPath, {
+      setHeaders: (res, filePath) => {
+        // 确保正确的 MIME 类型
+        if (filePath.endsWith('.js')) {
+          res.setHeader('Content-Type', 'application/javascript');
+        } else if (filePath.endsWith('.css')) {
+          res.setHeader('Content-Type', 'text/css');
+        }
+      }
+    }));
+  }
+  
+  // 其他静态资源目录
+  if (fs.existsSync(path.join(clientDistPath, 'icon'))) {
+    app.use('/icon', express.static(path.join(clientDistPath, 'icon')));
+  }
+  if (fs.existsSync(path.join(clientDistPath, 'teams'))) {
+    app.use('/teams', express.static(path.join(clientDistPath, 'teams')));
+  }
+  
+  // 根目录静态文件（index.html 等）
+  app.use(express.static(clientDistPath, {
+    setHeaders: (res, filePath) => {
+      // 确保正确的 MIME 类型
+      if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      } else if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css');
+      }
+    }
+  }));
+} else {
+  console.warn('⚠️ 前端构建产物目录不存在:', clientDistPath);
+  console.warn('   请确保已执行: npm run build:client');
+}
+
+// 备用静态资源目录
+if (fs.existsSync(publicPath)) {
+  app.use(express.static(publicPath));
+  console.log('📁 使用公共资源目录:', publicPath);
+}
+
+// API 路由
 app.use('/api/matches', require('./routes/matches'));
 app.use('/api/live', require('./routes/live'));
 app.use('/api/crawler', require('./routes/crawler'));
@@ -74,53 +136,30 @@ app.use('/api/signals', require('./routes/signals'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/plans', require('./routes/plans'));
 
-// 健康检查
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
-
-// 静态文件服务 - 支持前端构建产物和公共资源
-// 必须在 API 路由之后、SPA 路由之前
-const clientDistPath = path.join(__dirname, '../client/dist');
-const publicPath = path.join(__dirname, '../public');
-
-// 优先使用 client/dist（生产环境）
-if (fs.existsSync(clientDistPath)) {
-  // 静态资源（assets、icon 等）优先匹配
-  app.use('/assets', express.static(path.join(clientDistPath, 'assets')));
-  app.use('/icon', express.static(path.join(clientDistPath, 'icon')));
-  app.use('/teams', express.static(path.join(clientDistPath, 'teams')));
-  // 其他静态文件
-  app.use(express.static(clientDistPath));
-  console.log('📦 使用前端构建产物:', clientDistPath);
-}
-
-// 其次使用 public（开发环境或备用）
-if (fs.existsSync(publicPath)) {
-  app.use(express.static(publicPath));
-  console.log('📁 使用公共资源目录:', publicPath);
-}
-
-// SPA 路由支持 - 所有非 API 和非静态资源路由返回 index.html（Vue Router 处理）
+// SPA 路由支持 - 所有其他路由返回 index.html（Vue Router 处理）
 app.get('*', (req, res, next) => {
   // 跳过 API 路由
   if (req.path.startsWith('/api')) {
     return next();
   }
   
-  // 跳过静态资源（已有文件扩展名）
-  const ext = path.extname(req.path);
-  if (ext && ext !== '.html') {
-    return next();
+  // 跳过静态资源请求（有文件扩展名且不是 .html）
+  const ext = path.extname(req.path).toLowerCase();
+  const staticExtensions = ['.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.json'];
+  if (ext && staticExtensions.includes(ext)) {
+    // 静态资源应该已经被上面的静态文件服务处理了
+    // 如果到这里说明文件不存在，返回 404
+    return res.status(404).json({ error: 'Static file not found', path: req.path });
   }
   
   // 返回前端入口文件
   const indexPath = path.join(__dirname, '../client/dist/index.html');
   if (fs.existsSync(indexPath)) {
+    res.setHeader('Content-Type', 'text/html');
     return res.sendFile(indexPath);
   }
   
-  // 如果前端未构建，返回 404
+  // 如果前端未构建，返回错误
   res.status(404).json({ error: 'Frontend not built. Please run: cd client && npm run build' });
 });
 

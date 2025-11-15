@@ -103,6 +103,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { showError, showSuccess } from '@/utils/message'
 import { ElMessage } from 'element-plus'
 import { matchesApi, articlesApi } from '@/api'
 
@@ -329,7 +330,7 @@ const fetchMatches = async () => {
     }
   } catch (error) {
     console.error('获取比赛数据失败:', error)
-    ElMessage.error('获取比赛数据失败')
+    showError('获取比赛数据失败，请刷新页面重试')
   } finally {
     loading.value = false
   }
@@ -388,7 +389,7 @@ const goToMatch = async (matchId) => {
   const match = matches.value.find(m => m.id === matchId)
   
   if (!match) {
-    ElMessage.error('未找到比赛信息')
+    showError('未找到该比赛信息，可能已被删除或不存在')
     return
   }
   
@@ -435,7 +436,7 @@ const goToMatch = async (matchId) => {
 
 const refreshData = () => {
   fetchMatches()
-  ElMessage.success('数据已刷新')
+  showSuccess('比赛数据已刷新')
 }
 
 const startAutoRefresh = () => {

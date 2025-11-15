@@ -28,6 +28,7 @@
         @ended="onEnded"
         class="video-element"
         playsinline
+        crossorigin="anonymous"
       >
         您的浏览器不支持视频播放
       </video>
@@ -38,7 +39,24 @@
 <script>
 import Hls from 'hls.js'
 
+const STREAM_PROXY_MODE = (() => {
+  try {
+    const mode = import.meta.env.VITE_STREAM_PROXY_MODE
+    if (mode) {
+      return mode.toLowerCase()
+    }
+  } catch (error) {
+    console.warn('无法读取 VITE_STREAM_PROXY_MODE:', error)
+  }
+  return 'proxy'
+})()
+
+const STREAM_PROXY_ENABLED = STREAM_PROXY_MODE !== 'direct'
+
 const STREAM_PROXY_BASE = (() => {
+  if (!STREAM_PROXY_ENABLED) {
+    return ''
+  }
   try {
     const value = import.meta.env.VITE_STREAM_PROXY_ORIGIN
     if (value) {
@@ -182,21 +200,23 @@ export default {
             this.hls.destroy()
           }
 
-          this.hls = new Hls({
+          const hlsConfig = {
             enableWorker: false,
             lowLatencyMode: true,
-            backBufferLength: 90,
-            // 设置请求头
-            xhrSetup: function(xhr, url) {
+            backBufferLength: 90
+          }
+
+          if (STREAM_PROXY_ENABLED) {
+            hlsConfig.xhrSetup = function(xhr, url) {
               console.log('🔧 设置HLS请求头:', url)
-              
-              // 为所有请求设置标准请求头
               xhr.setRequestHeader('Accept', 'application/vnd.apple.mpegurl, application/x-mpegURL, application/octet-stream, */*')
               xhr.setRequestHeader('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8')
               xhr.setRequestHeader('Cache-Control', 'no-cache')
               xhr.setRequestHeader('Pragma', 'no-cache')
             }
-          })
+          }
+
+          this.hls = new Hls(hlsConfig)
 
         }
 
@@ -235,9 +255,9 @@ export default {
 
         this.createHlsInstance()
         this.attachHlsEvents()
-        const proxySource = this.buildProxyUrl()
-        console.log('🔄 通过代理加载m3u8:', proxySource)
-        this.hls.loadSource(proxySource)
+        const sourceUrl = STREAM_PROXY_ENABLED ? this.buildProxyUrl() : this.currentStreamUrl
+        console.log(`🔄 ${STREAM_PROXY_ENABLED ? '通过代理' : '直接'}加载m3u8:`, sourceUrl)
+        this.hls.loadSource(sourceUrl)
         this.hls.attachMedia(video)
         
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -295,6 +315,9 @@ export default {
       }
       if (this.playPageToken) {
         params.set('referer', this.playPageToken)
+      }
+      if (!STREAM_PROXY_ENABLED) {
+        return this.currentStreamUrl
       }
       return `${STREAM_PROXY_BASE}/proxy-m3u8?${params.toString()}`
     },

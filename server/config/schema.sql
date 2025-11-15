@@ -1,7 +1,6 @@
--- 创建数据库
-CREATE DATABASE IF NOT EXISTS live_sports CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS BTHsprots CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-USE live_sports;
+USE BTHsprots;
 
 -- 用户表
 CREATE TABLE IF NOT EXISTS users (
@@ -35,13 +34,12 @@ CREATE TABLE IF NOT EXISTS matches (
   INDEX idx_league (league)
 );
 
--- 信号源表
 CREATE TABLE IF NOT EXISTS live_sources (
   id INT PRIMARY KEY AUTO_INCREMENT,
   match_id INT NOT NULL,
   name VARCHAR(100) NOT NULL,
   url TEXT NOT NULL,
-  source_type ENUM('jrkan', 'popo', 'proxy') NOT NULL,
+  source_type ENUM('jrkan', 'proxy') NOT NULL,
   quality_score INT DEFAULT 0,
   is_active BOOLEAN DEFAULT TRUE,
   last_check TIMESTAMP,
@@ -102,8 +100,122 @@ CREATE TABLE IF NOT EXISTS stream_mappings (
   INDEX idx_last_verified (last_verified)
 ) COMMENT='比赛ID与信号源ID的映射关系表';
 
+-- 用户会话表
+CREATE TABLE IF NOT EXISTS user_sessions (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  token VARCHAR(500) NOT NULL,
+  refresh_token VARCHAR(500),
+  device_info VARCHAR(255),
+  ip_address VARCHAR(50),
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_user_id (user_id),
+  INDEX idx_token (token(100)),
+  INDEX idx_expires_at (expires_at)
+);
+
+-- 用户关注表
+CREATE TABLE IF NOT EXISTS user_follows (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  expert_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE KEY uk_user_expert (user_id, expert_id),
+  INDEX idx_user_id (user_id),
+  INDEX idx_expert_id (expert_id)
+);
+
+-- 专家申请表
+CREATE TABLE IF NOT EXISTS expert_applications (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  reason TEXT,
+  status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+  reviewed_by INT,
+  reviewed_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_user_id (user_id),
+  INDEX idx_status (status)
+);
+
+-- 聊天消息表
+CREATE TABLE IF NOT EXISTS user_chat_messages (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  match_id INT,
+  match_identifier VARCHAR(100),
+  user_id INT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_match_id (match_id),
+  INDEX idx_match_identifier (match_identifier),
+  INDEX idx_user_id (user_id),
+  INDEX idx_created_at (created_at)
+);
+
+-- 聊天频率限制表
+CREATE TABLE IF NOT EXISTS user_chat_rate_limit (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  match_id INT,
+  match_identifier VARCHAR(100),
+  last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  message_count INT DEFAULT 1,
+  window_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_user_match (user_id, match_id),
+  INDEX idx_user_match_identifier (user_id, match_identifier),
+  INDEX idx_window_start (window_start)
+);
+
+-- 用户评论表
+CREATE TABLE IF NOT EXISTS user_comments (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  plan_id INT,
+  user_id INT NOT NULL,
+  content TEXT NOT NULL,
+  parent_id INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (parent_id) REFERENCES user_comments(id) ON DELETE CASCADE,
+  INDEX idx_plan_id (plan_id),
+  INDEX idx_user_id (user_id),
+  INDEX idx_parent_id (parent_id)
+);
+
+-- 用户通知表
+CREATE TABLE IF NOT EXISTS user_notifications (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  type VARCHAR(50) NOT NULL,
+  title VARCHAR(255),
+  content TEXT,
+  is_read TINYINT(1) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_user_id (user_id),
+  INDEX idx_is_read (is_read),
+  INDEX idx_created_at (created_at)
+);
+
+-- 用户设置表
+CREATE TABLE IF NOT EXISTS user_settings (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL UNIQUE,
+  notification_expert_plan TINYINT(1) DEFAULT 1,
+  notification_comment_reply TINYINT(1) DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- 插入示例数据
 INSERT INTO matches (home_team, away_team, league, match_time, status, source_platform) VALUES
-('76人', '尼克斯', 'NBA季前赛', '2025-10-04 23:00:00', 'live', 'popozhibo'),
-('梅斯', '马赛', '法甲第7轮', '2025-10-04 23:00:00', 'finished', 'popozhibo'),
-('切尔西', '利物浦', '英超', '2025-10-05 00:30:00', 'live', 'popozhibo');
+('76人', '尼克斯', 'NBA季前赛', '2025-10-04 23:00:00', 'live', 'jrkan'),
+('梅斯', '马赛', '法甲第7轮', '2025-10-04 23:00:00', 'finished', 'jrkan'),
+('切尔西', '利物浦', '英超', '2025-10-05 00:30:00', 'live', 'jrkan');

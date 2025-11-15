@@ -21,7 +21,9 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': {
           target: apiTarget,
-          changeOrigin: true
+          changeOrigin: true,
+          secure: false,
+          rewrite: (path) => path
         }
       }
     },

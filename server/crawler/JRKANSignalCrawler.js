@@ -3,6 +3,12 @@ const cheerio = require('cheerio');
 const logger = require('../utils/logger');
 const { decodeYumixiu } = require('../utils/yumixiuDecoder');
 
+const ENTRY_DOMAINS = [
+  'http://play.jgdhds.com',
+  'http://play.sportsteam7777.com',
+  'http://play.sportsteam368.com'
+];
+
 const lineStats = new Map();
 const STAT_TTL = 6 * 60 * 60 * 1000; // 6小时
 
@@ -10,6 +16,7 @@ class JRKANSignalCrawler {
   constructor() {
     this.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
     this.timeout = 8000;
+    this.entryDomains = [...ENTRY_DOMAINS];
     this.resetSession();
   }
 
@@ -122,6 +129,94 @@ class JRKANSignalCrawler {
         logger.warn('crawlSignal 未找到 id.html', { streamUrl, smUrl, label });
         return null;
       }
+      
+      // 验证提取的URL是否完整
+      if (!idUrl.includes('.html') && !idUrl.includes('msss.html')) {
+        console.warn(`⚠️ 提取的URL可能不完整: ${idUrl}，尝试从sm.html的id参数构造`);
+        // 尝试从sm.html的URL中提取id参数
+        try {
+          const smUrlObj = new URL(smUrl);
+          const idParam = smUrlObj.searchParams.get('id');
+          if (idParam) {
+            const baseUrlObj = new URL(smUrl);
+            const constructedIdUrl = `${baseUrlObj.protocol}//${baseUrlObj.host}/play/${idParam}.html`;
+            console.log(`🔧 构造id.html URL: ${constructedIdUrl}`);
+            const idUrlToUse = constructedIdUrl;
+            console.log(`📍 使用构造的id.html: ${idUrlToUse}`);
+            
+            // 第5步：访问构造的 {id}.html 页面
+            const thirdPageHtml = await this.fetchPage(idUrlToUse, smUrl);
+            
+            // 第5.5步：提取第三层页面的iframe src（包含m3u8信息）
+            const thirdIframeSrc = this.extractIframeSrc(thirdPageHtml, idUrlToUse);
+            if (!thirdIframeSrc) {
+              console.log('❌ 未找到第三层iframe src');
+              logger.warn('crawlSignal 未找到第三层 iframe', { streamUrl, idUrl: idUrlToUse });
+              return null;
+            }
+            console.log(`📍 找到第三层iframe src: ${thirdIframeSrc}`);
+
+            let finalPageHtml = thirdPageHtml;
+
+            if (thirdIframeSrc && thirdIframeSrc.includes('.html')) {
+              try {
+                finalPageHtml = await this.fetchPage(thirdIframeSrc, idUrlToUse);
+              } catch (iframeError) {
+                console.warn('⚠️ 第三层iframe请求失败:', iframeError.message);
+                logger.warn('crawlSignal 第三层 iframe 请求失败', {
+                  streamUrl,
+                  iframe: thirdIframeSrc,
+                  message: iframeError.message,
+                  label
+                });
+              }
+            }
+            
+            // 第6步：提取最终的m3u8播放地址
+            let extractionBaseUrl = thirdIframeSrc;
+            if (!extractionBaseUrl || (!extractionBaseUrl.includes('.m3u8') && !extractionBaseUrl.includes('msss.html'))) {
+              extractionBaseUrl = idUrlToUse || extractionBaseUrl || streamUrl;
+            }
+
+            const playUrl = await this.extractM3u8Url(finalPageHtml, extractionBaseUrl);
+            if (!playUrl) {
+              console.log('❌ 未找到m3u8播放地址');
+              logger.warn('crawlSignal 未找到 m3u8', { streamUrl, thirdIframeSrc, label });
+              return null;
+            }
+            
+            // 第7步：过滤广告内容，确保是纯净的视频流
+            const cleanPlayUrl = this.filterAdContent(playUrl);
+            if (!cleanPlayUrl) {
+              console.log('❌ 过滤后未找到有效播放地址');
+              logger.warn('crawlSignal 过滤后无有效播放地址', { streamUrl, playUrl, label });
+              return null;
+            }
+              
+            console.log(`✅ 成功提取播放地址: ${cleanPlayUrl}`);
+            logger.info('crawlSignal 成功', { streamUrl, playUrl: cleanPlayUrl, label });
+            logger.info('crawlSignal 耗时', {
+              streamUrl,
+              label,
+              durationMs: Date.now() - startedAt,
+              stage: 'final'
+            });
+            
+            return {
+              sourceUrl: streamUrl,
+              playUrl: cleanPlayUrl,
+              cookies: this.getCookieHeader(),
+              type: this.detectStreamType(cleanPlayUrl),
+              quality: this.detectQuality(streamUrl),
+              label,
+              timestamp: Date.now()
+            };
+          }
+        } catch (constructError) {
+          console.warn(`⚠️ 构造id.html URL失败: ${constructError.message}`);
+        }
+      }
+      
       console.log(`📍 找到id.html: ${idUrl}`);
       
       // 第5步：访问 {id}.html 页面
@@ -226,14 +321,47 @@ class JRKANSignalCrawler {
       const labelUsage = new Map();
 
       this.resetSession();
-      const firstPageHtml = await this.fetchPage(streamUrl);
-      const channelButtons = this.extractChannelButtons(firstPageHtml, streamUrl);
-      const normalizedButtons = [...channelButtons];
-      if (!normalizedButtons.some(button => button.url === streamUrl)) {
-        normalizedButtons.unshift({ label: '线路1', url: streamUrl });
+
+      const entryUrls = this.generateEntryUrls(streamUrl);
+      const aggregatedButtons = [];
+      const buttonUrlSet = new Set();
+
+      const ensureButton = (button) => {
+        if (!button || !button.url) return;
+        if (buttonUrlSet.has(button.url)) return;
+        buttonUrlSet.add(button.url);
+        aggregatedButtons.push(button);
+      };
+
+      for (const entryUrl of entryUrls) {
+        try {
+          console.log(`🌐 [JRKAN] 入口检测: ${entryUrl}`);
+          const html = await this.fetchPage(entryUrl);
+          const buttons = this.extractChannelButtons(html, entryUrl);
+          if (!buttons.length) {
+            console.warn(`⚠️ 入口 ${entryUrl} 未检测到频道按钮`);
+          }
+          buttons.forEach(button => ensureButton(button));
+          if (!buttons.some(btn => btn.url === entryUrl)) {
+            ensureButton({
+              label: this.getEntryFallbackLabel(entryUrl, aggregatedButtons.length),
+              url: entryUrl
+            });
+          }
+        } catch (error) {
+          console.warn(`⚠️ 入口 ${entryUrl} 加载失败: ${error.message}`);
+          ensureButton({
+            label: this.getEntryFallbackLabel(entryUrl, aggregatedButtons.length),
+            url: entryUrl
+          });
+        }
       }
 
-      const rawCandidates = (normalizedButtons.length > 0 ? normalizedButtons : [{ label: '线路1', url: streamUrl }])
+      const normalizedButtons = aggregatedButtons.length > 0
+        ? aggregatedButtons
+        : [{ label: '线路1', url: streamUrl }];
+
+      const rawCandidates = normalizedButtons
         .map((item, index) => ({
           ...item,
           index,
@@ -262,6 +390,8 @@ class JRKANSignalCrawler {
             break;
           }
 
+          // 注意：过滤"主播解说"已在 extractChannelButtons 中完成，这里不需要再次过滤
+
           const scopedCrawler = new JRKANSignalCrawler();
           scopedCrawler.timeout = this.timeout;
           scopedCrawler.userAgent = this.userAgent;
@@ -272,10 +402,32 @@ class JRKANSignalCrawler {
           });
 
           if (result && result.playUrl) {
+            
             this.recordLineResult(candidate.url, true);
             const normalizedKey = this.normalizeStreamKey(result.playUrl);
+            
+            // 🎯 增强去重：检查是否已经存在相同的URL（去除参数后比较）
+            const urlForComparison = this.getStreamUrlForComparison(result.playUrl);
+            const isDuplicateUrl = results.some(existing => {
+              const existingUrl = this.getStreamUrlForComparison(existing.playUrl);
+              return existingUrl === urlForComparison;
+            });
+            
+            if (isDuplicateUrl) {
+              console.log(`🔁 忽略重复信号源 (URL相同): ${result.playUrl.substring(0, 80)}...`);
+              continue;
+            }
+            
             if (!uniqueStreams.has(normalizedKey)) {
               uniqueStreams.set(normalizedKey, true);
+              
+              // 🚫 额外检查：如果多个"云直播"或"线路"名称指向相同URL，可能是重复的"主播解说"线路
+              const isPossibleCommentator = this.isPossibleCommentatorStream(candidate.label, result.playUrl, results);
+              if (isPossibleCommentator) {
+                console.log(`🚫 疑似"主播解说"线路(通过URL相似性检测): ${candidate.label} - ${result.playUrl.substring(0, 80)}...`);
+                continue;
+              }
+              
               const baseLabel = (candidate.label || result.label || `线路${candidate.index + 1}`).trim();
               const labelCount = labelUsage.get(baseLabel) || 0;
               labelUsage.set(baseLabel, labelCount + 1);
@@ -363,21 +515,39 @@ class JRKANSignalCrawler {
    * 获取页面HTML
    */
   async fetchPage(url, referer = 'https://www.jrs80.com/') {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': this.userAgent,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'Referer': referer,
-        'Connection': 'keep-alive',
-        ...(this.getCookieHeader() ? { 'Cookie': this.getCookieHeader() } : {})
-      },
-      timeout: this.timeout,
-      maxRedirects: 10
-    });
-    
-    this.storeCookies(response.headers['set-cookie']);
-    return response.data;
+    try {
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': this.userAgent,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          'Referer': referer,
+          'Connection': 'keep-alive',
+          'Accept-Encoding': 'gzip, deflate',
+          'Upgrade-Insecure-Requests': '1',
+          ...(this.getCookieHeader() ? { 'Cookie': this.getCookieHeader() } : {})
+        },
+        timeout: this.timeout,
+        maxRedirects: 10,
+        validateStatus: function (status) {
+          return status < 500; // 允许4xx状态码，但会抛出错误
+        }
+      });
+      
+      if (response.status === 403) {
+        console.warn(`⚠️ 403错误，可能被反爬虫拦截: ${url}`);
+        throw new Error(`Request failed with status code 403 - 可能被反爬虫拦截`);
+      }
+      
+      this.storeCookies(response.headers['set-cookie']);
+      return response.data;
+    } catch (error) {
+      if (error.response && error.response.status === 403) {
+        console.error(`❌ 403错误: ${url} - 可能被反爬虫拦截`);
+        throw new Error(`Request failed with status code 403 - 可能被反爬虫拦截`);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -433,40 +603,164 @@ class JRKANSignalCrawler {
     const buttons = [];
     const seen = new Set();
 
+    // 扩展选择器，匹配更多可能的按钮位置
     const candidateSelectors = [
       '.sub_channel a',
       'a.item',
       '.channel-list a',
-      '.line-list a'
+      '.line-list a',
+      '.channel-item a',
+      '.stream-item a',
+      '.play-btn',
+      '.btn-play',
+      'a[href*="steam"]',
+      'a[href*="/play/"]',
+      'button[data-play]',
+      'a[data-play]',
+      'div.channel a',
+      'ul li a',
+      '.channel-btn',
+      '.line-btn'
     ];
 
+    const isExcluded = (text) => {
+      if (!text) return false;
+      const normalized = text.toLowerCase();
+      if (normalized.includes('主播') || normalized.includes('解说') || normalized.includes('commentator') || normalized.includes('host')) {
+        return true;
+      }
+      if ((normalized.includes('主播') || normalized.includes('解说')) && /[①②③④⑤⑥⑦⑧⑨⑩1-9]/.test(text)) {
+        return true;
+      }
+      return false;
+    };
+
     candidateSelectors.forEach(selector => {
-      $(selector).each((index, element) => {
-        const $el = $(element);
-        let playPath = $el.attr('data-play') || $el.attr('href');
-        if (!playPath || playPath.startsWith('javascript')) {
-          return;
-        }
+      try {
+        $(selector).each((index, element) => {
+          const $el = $(element);
+          let playPath = $el.attr('data-play') || $el.attr('href') || $el.attr('data-url');
+          if (!playPath || playPath.startsWith('javascript') || playPath === '#') {
+            return;
+          }
 
-        const url = this.normalizeUrl(playPath, baseUrl);
-        if (!url || seen.has(url)) {
-          return;
-        }
+          const url = this.normalizeUrl(playPath, baseUrl);
+          if (!url || seen.has(url)) {
+            return;
+          }
 
-        seen.add(url);
-        let label = ($el.attr('data-group') || $el.text() || '').replace(/\s+/g, ' ').trim();
-        if (!label) {
-          label = `线路${buttons.length + 1}`;
-        }
+          const rawText = ($el.text() || '').replace(/\s+/g, ' ').trim();
+          const labelCandidates = [
+            $el.attr('data-group'),
+            $el.attr('data-label'),
+            $el.attr('title'),
+            rawText,
+            $el.find('span').text(),
+            $el.find('strong').text()
+          ].filter(Boolean).map(text => text.replace(/\s+/g, ' ').trim());
 
-        buttons.push({
-          label,
-          url
+          let label = labelCandidates.find(Boolean) || '';
+
+          if (isExcluded(label) || isExcluded(rawText)) {
+            console.log(`🚫 过滤掉"主播解说"信号 (label/text): ${label || rawText}`);
+            return;
+          }
+
+          if (isExcluded(url)) {
+            console.log(`🚫 过滤掉"主播解说"信号 (URL): ${url}`);
+            return;
+          }
+
+          if (!label && rawText) {
+            label = rawText;
+          }
+          if (!label) {
+            label = `线路${buttons.length + 1}`;
+          }
+
+          seen.add(url);
+          buttons.push({
+            label,
+            url
+          });
         });
-      });
+      } catch (e) {
+        // 忽略selector错误，继续处理其他selector
+        console.warn(`⚠️ 处理selector ${selector} 时出错:`, e.message);
+      }
     });
 
+    console.log(`📋 提取到 ${buttons.length} 个频道按钮 (已过滤"主播解说")`);
     return buttons;
+  }
+
+  getEntryFallbackLabel(entryUrl, index) {
+    try {
+      const urlObj = new URL(entryUrl);
+      if (urlObj.hostname.includes('sportsteam7777')) {
+        return '云直播④';
+      }
+      if (urlObj.hostname.includes('sportsteam368')) {
+        return '云直播①';
+      }
+      if (urlObj.hostname.includes('jgdhds')) {
+        return '云直播②';
+      }
+    } catch (error) {
+      // ignore
+    }
+    return `线路${index + 1}`;
+  }
+
+  generateEntryUrls(streamUrl) {
+    const urls = [];
+    const seen = new Set();
+    const pushUrl = (url) => {
+      if (!url) return;
+      if (seen.has(url)) return;
+      seen.add(url);
+      urls.push(url);
+    };
+
+    if (streamUrl) {
+      pushUrl(streamUrl);
+    }
+
+    const steamId = this.extractSteamId(streamUrl);
+    this.entryDomains.forEach(domain => {
+      const replaced = this.replaceDomain(streamUrl, domain, steamId);
+      pushUrl(replaced);
+    });
+
+    return urls;
+  }
+
+  extractSteamId(streamUrl) {
+    if (!streamUrl) return null;
+    const match = streamUrl.match(/steam(\d+)/);
+    return match ? match[1] : null;
+  }
+
+  replaceDomain(streamUrl, domain, steamId = null) {
+    if (!domain) {
+      return streamUrl;
+    }
+    const trimmedDomain = domain.replace(/\/$/, '');
+    if (!streamUrl) {
+      return steamId ? `${trimmedDomain}/play/steam${steamId}.html` : `${trimmedDomain}/`;
+    }
+    try {
+      const sourceUrl = new URL(streamUrl);
+      const domainUrl = new URL(trimmedDomain);
+      sourceUrl.protocol = domainUrl.protocol;
+      sourceUrl.host = domainUrl.host;
+      return sourceUrl.toString();
+    } catch (error) {
+      if (steamId) {
+        return `${trimmedDomain}/play/steam${steamId}.html`;
+      }
+      return `${trimmedDomain}/`;
+    }
   }
 
   /**
@@ -582,6 +876,56 @@ class JRKANSignalCrawler {
     return url;
   }
 
+  /**
+   * 提取用于比较的URL（去除参数，只保留基础路径）
+   */
+  getStreamUrlForComparison(playUrl = '') {
+    if (!playUrl) return '';
+    try {
+      const url = new URL(playUrl);
+      // 只保留协议、主机和路径，去除查询参数和哈希
+      return `${url.protocol}//${url.host}${url.pathname}`;
+    } catch (error) {
+      // 如果不是完整URL，尝试提取基础路径
+      const match = playUrl.match(/^(https?:\/\/[^\/]+(?:\/[^?#]*)?)/);
+      return match ? match[1] : playUrl.split('?')[0].split('#')[0];
+    }
+  }
+  
+  /**
+   * 判断是否可能是"主播解说"线路
+   * 通过检查：1) URL相似性 2) 多个"云直播"名称指向相似URL
+   */
+  isPossibleCommentatorStream(label = '', playUrl = '', existingResults = []) {
+    if (!label || !playUrl) return false;
+    
+    const labelLower = label.toLowerCase();
+    
+    // 如果名称中包含"云直播"，且已经存在其他"云直播"线路，可能是重复的"主播解说"
+    if (labelLower.includes('云直播')) {
+      const similarLabels = existingResults.filter(r => {
+        const rLabel = (r.label || '').toLowerCase();
+        return rLabel.includes('云直播') || rLabel.includes('线路');
+      });
+      
+      if (similarLabels.length > 0) {
+        // 检查URL是否相似（相同的主机和路径）
+        const currentUrlBase = this.getStreamUrlForComparison(playUrl);
+        const hasSimilarUrl = similarLabels.some(r => {
+          const rUrlBase = this.getStreamUrlForComparison(r.playUrl);
+          // 如果URL的基础部分相同，可能是重复线路
+          return rUrlBase === currentUrlBase;
+        });
+        
+        if (hasSimilarUrl) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+  
   normalizeStreamKey(playUrl = '') {
     if (!playUrl) return '';
     try {

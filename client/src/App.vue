@@ -20,6 +20,29 @@
               方案推荐
             </router-link>
           </nav>
+          
+          <!-- 用户菜单 -->
+          <div class="user-menu">
+            <el-dropdown v-if="isLoggedIn" trigger="click" @command="handleUserCommand">
+              <div class="user-info">
+                <el-avatar :size="32" :src="userAvatar">
+                  {{ nickname.charAt(0).toUpperCase() }}
+                </el-avatar>
+                <span class="username">{{ nickname }}</span>
+                <el-icon><ArrowDown /></el-icon>
+              </div>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                  <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+            <div v-else class="auth-buttons">
+              <router-link to="/login" class="auth-link">登录</router-link>
+              <router-link to="/register" class="auth-link register-link">注册</router-link>
+            </div>
+          </div>
         </div>
       </el-header>
 
@@ -40,7 +63,43 @@
 </template>
 
 <script setup>
-import { Calendar, Document } from '@element-plus/icons-vue'
+import { computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/user'
+import { Calendar, Document, ArrowDown } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
+
+const router = useRouter()
+const userStore = useUserStore()
+
+// 计算属性，确保响应式
+const isLoggedIn = computed(() => userStore.loggedIn)
+const nickname = computed(() => userStore.nickname)
+const userAvatar = computed(() => userStore.user?.avatar)
+
+// 初始化用户状态
+onMounted(async () => {
+  await userStore.init()
+})
+
+// 处理用户菜单命令
+const handleUserCommand = async (command) => {
+  if (command === 'logout') {
+    try {
+      await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+      await userStore.logout()
+      router.push('/')
+    } catch {
+      // 用户取消
+    }
+  } else if (command === 'profile') {
+    router.push('/profile')
+  }
+}
 </script>
 
 <style scoped>
@@ -117,6 +176,62 @@ import { Calendar, Document } from '@element-plus/icons-vue'
 
 .nav-item.router-link-active {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.user-info:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.username {
+  font-size: 14px;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-link {
+  color: white;
+  text-decoration: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+  font-size: 14px;
+}
+
+.auth-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.register-link {
+  background: rgba(255, 255, 255, 0.2);
+  font-weight: 500;
+}
+
+.register-link:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .main-content {

@@ -35,6 +35,32 @@ function detectMatchId(match) {
   return match.id || `jrs_${Date.now()}`;
 }
 
+// 过滤"主播解说"频道
+function filterCommentatorChannels(channels) {
+  if (!Array.isArray(channels)) {
+    return [];
+  }
+  
+  // 🚫 过滤"主播解说"的关键词
+  const excludeKeywords = ['主播', '解说', 'commentator', 'host'];
+  const isExcludedChannel = (channelName) => {
+    if (!channelName) return false;
+    const lowerName = channelName.toLowerCase();
+    return excludeKeywords.some(keyword => lowerName.includes(keyword.toLowerCase()));
+  };
+  
+  // 过滤掉"主播解说"频道
+  const filteredChannels = channels.filter(channel => {
+    if (isExcludedChannel(channel.name)) {
+      console.log(`🚫 过滤掉"主播解说"频道: ${channel.name}`);
+      return false;
+    }
+    return true;
+  });
+  
+  return filteredChannels;
+}
+
 async function getMatchesFromCrawler() {
   const now = Date.now();
   if (!cachedMatches.length || (now - lastFetchTime > CACHE_DURATION)) {
@@ -58,19 +84,29 @@ async function getMatchesFromCrawler() {
 // 获取比赛列表
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 1000, league, status } = req.query;
+    const { page = 1, limit = 1000, league, status, showFinished = 'false' } = req.query;
     
     // 从缓存获取比赛数据
     const matches = await getMatchesFromCrawler();
     
-    // 过滤数据：移除明确标记为已结束的比赛，并隐藏开赛超过5小时的比赛
+    // SEO优化：保留所有历史比赛，但默认只显示进行中/即将开始的比赛
     const FIVE_HOURS = 5 * 60 * 60 * 1000;
     const VIEW_LIMIT = 2.5 * 60 * 60 * 1000;
     const now = Date.now();
+    const showFinishedMatches = showFinished === 'true';
+    
     let filteredMatches = matches.filter(match => {
-      if (match.status === '已结束') {
-        return false;
+      // 如果明确要求显示已结束的比赛，则不过滤
+      if (showFinishedMatches) {
+        return true;
       }
+      
+      // 默认只显示进行中/即将开始的比赛（用于前端列表显示）
+      // 但所有比赛数据都保留，用于SEO和详情页访问
+      if (match.status === '已结束') {
+        return false; // 默认不显示，但数据保留
+      }
+      
       const matchTime = crawler.parseTime(match.time);
       if (!matchTime || Number.isNaN(matchTime.getTime())) {
         return true; // 时间无法解析时保留，避免误删
@@ -112,7 +148,7 @@ router.get('/', async (req, res) => {
         homeScore,
         awayScore,
         canWatch,
-        channels: match.channels || []
+        channels: filterCommentatorChannels(match.channels || [])
       };
     });
 
@@ -136,19 +172,22 @@ router.get('/', async (req, res) => {
   }
 });
 
-// 获取比赛详情
+// 获取比赛详情（支持历史比赛访问，用于SEO）
 router.get('/detail/:id', async (req, res) => {
   try {
     const requestedId = req.params.id;
     
-    // 从缓存获取所有比赛数据
+    // 从缓存获取所有比赛数据（包括历史比赛）
     const allMatches = await getMatchesFromCrawler();
     
+    // SEO优化：允许访问所有比赛（包括已结束的），保留历史页面用于SEO
     const match = allMatches.find(m => {
       const detectedId = detectMatchId(m);
       return detectedId === requestedId || m.id === requestedId;
     });
     
+    // 如果当前缓存中没有，尝试从数据库查找历史比赛（如果有数据库的话）
+    // 这里先保持简单，只从缓存查找
     if (!match) {
       return res.status(404).json({
         code: 404,
@@ -168,7 +207,7 @@ router.get('/detail/:id', async (req, res) => {
       away_team_logo: match.awayLogo || '/teams/default.png',
       home_score: homeScore,
       away_score: awayScore,
-      channels: match.channels || []
+      channels: filterCommentatorChannels(match.channels || [])
     };
     
     res.json({

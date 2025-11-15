@@ -36,49 +36,59 @@
         </div>
       </div>
     </div>
-    <div class="player-container">
-      <VideoPlayer v-if="extractedStreamUrl && !streamFailed"
-        :streamUrl="extractedStreamUrl"
-        :streamId="streamId"
-        :session-token="sessionToken"
-        :play-page-token="playPageToken"
-        class="pure-stream-player"
-        @error="onStreamError"
-        @success="onStreamSuccess"
-        @stall="onStreamStall"
-      />
+    <!-- 播放器和聊天区布局 -->
+    <el-row :gutter="20" class="player-chat-section">
+      <!-- 播放器 -->
+      <el-col :xs="24" :sm="24" :md="16" :lg="16" :xl="16">
+        <div class="player-container">
+          <VideoPlayer v-if="extractedStreamUrl"
+            :streamUrl="extractedStreamUrl"
+            :streamId="streamId"
+            :session-token="sessionToken"
+            :play-page-token="playPageToken"
+            class="pure-stream-player"
+            @error="onStreamError"
+            @success="onStreamSuccess"
+            @stall="onStreamStall"
+          />
 
-      <div v-else class="stream-status-container">
-        <div class="status-content" :class="{ compact: isInitializing }">
-          <div v-if="isInitializing" class="status-inline">
-            <div class="inline-spinner"></div>
-            <span>正在加载直播信号...</span>
-          </div>
-          <template v-else>
-            <div class="status-icon">📺</div>
-            <h3>{{ noSignal ? '当前并无直播源' : '视频无法播放' }}</h3>
-            <p>当前比赛暂时无法播放，请稍后重试。</p>
-            <div class="error-actions">
-              <el-button type="primary" @click="goBack">
-                <el-icon><ArrowLeft /></el-icon>
-                返回比赛列表
-              </el-button>
-              <el-button v-if="!noSignal" @click="retryStream">
-                <el-icon><Refresh /></el-icon>
-                重新尝试
-              </el-button>
+          <div v-else class="stream-status-container">
+            <div class="status-content compact">
+              <div class="status-inline">
+                <div class="inline-spinner"></div>
+                <span>正在尝试连接直播信号，请稍候...</span>
+              </div>
+              <div class="error-actions">
+                <el-button type="primary" @click="goBack">
+                  <el-icon><ArrowLeft /></el-icon>
+                  返回比赛列表
+                </el-button>
+                <el-button @click="retryStream">
+                  <el-icon><Refresh /></el-icon>
+                  重新尝试
+                </el-button>
+              </div>
             </div>
-          </template>
-        </div>
-      </div>
+          </div>
 
-      <div class="minimal-back-button">
-        <el-button type="primary" size="small" @click="goBack">
-          <el-icon><ArrowLeft /></el-icon>
-          返回
-        </el-button>
-      </div>
-    </div>
+          <div class="minimal-back-button">
+            <el-button type="primary" size="small" @click="goBack">
+              <el-icon><ArrowLeft /></el-icon>
+              返回
+            </el-button>
+          </div>
+        </div>
+      </el-col>
+
+      <!-- 聊天区 -->
+      <el-col :xs="24" :sm="24" :md="8" :lg="8" :xl="8">
+        <MatchChat 
+          v-if="chatMatchId" 
+          :match-id="chatMatchId" 
+          :start-time="formattedMatchInfo?.startTime || matchInfo?.startTime || matchInfo?.startTimestamp"
+        />
+      </el-col>
+    </el-row>
 
     <div class="signal-switcher" :class="{ 'is-empty': availableSignals.length === 0 }">
       <template v-if="availableSignals.length > 0">
@@ -101,9 +111,10 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { showError, showWarning, showSuccess, showInfo } from '@/utils/message'
 import { ArrowLeft, Refresh, FullScreen, Loading } from '@element-plus/icons-vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
+import MatchChat from '../components/MatchChat.vue'
 
 const DEFAULT_TEAM_LOGO = '/teams/default.png'
 
@@ -187,7 +198,7 @@ const streamFailed = ref(false)
 const availableSignals = ref([])
 const activeSignalIndex = ref(0)
 const noSignal = computed(() => route.query.noSignal === '1')
-const isInitializing = computed(() => loading.value && !extractedStreamUrl.value && !streamFailed.value)
+const isInitializing = computed(() => loading.value && !extractedStreamUrl.value)
 const streamIdParam = computed(() => route.params.streamId || route.query.streamId || '')
 const storedPayload = ref(loadPlayerPayload(streamIdParam.value))
 const matchInfo = computed(() => {
@@ -218,6 +229,23 @@ const formattedMatchInfo = computed(() => {
     homeLogo: withTeamLogoFallback(info.homeLogo || info.home_team_logo || ''),
     awayLogo: withTeamLogoFallback(info.awayLogo || info.away_team_logo || '')
   }
+})
+
+// 获取用于聊天的比赛ID
+// 优先使用数据库ID，如果没有则使用matchId或streamId作为match_identifier
+const chatMatchId = computed(() => {
+  const info = matchInfo.value
+  if (!info) {
+    // 如果没有matchInfo，尝试使用streamId作为match_identifier
+    return streamId.value || null
+  }
+  
+  // 优先使用数据库ID
+  if (info.id) return info.id
+  if (info.db_id) return info.db_id
+  
+  // 使用matchId或streamId作为match_identifier
+  return info.matchId || streamId.value || null
 })
 
 const decodeBase64 = (value) => {
@@ -277,8 +305,6 @@ const playPageUrl = ref(
     ''
 )
 
-const SIGNAL_CACHE_PREFIX = 'jrkan_signals_'
-const SIGNAL_CACHE_TTL = 5 * 60 * 1000 // 5分钟缓存
 const BANDWIDTH_MODE_SAVER = 'save'
 const BANDWIDTH_MODE_HD = 'hd'
 const QUALITY_KEYWORDS = [
@@ -288,8 +314,11 @@ const QUALITY_KEYWORDS = [
 ]
 const STALL_THRESHOLD = 2
 const MODE_SWITCH_COOLDOWN = 15 * 1000
+const STREAM_RETRY_MAX = 5
+const STREAM_RETRY_BASE_DELAY = 2000
 const stallCounter = ref(0)
 const lastModeSwitchAt = ref(Date.now())
+const streamRetryCount = ref(0)
 
 const detectPreferredBandwidthMode = () => {
   try {
@@ -334,11 +363,9 @@ const switchBandwidthMode = (mode, notifyMessage = '', forceSwitchToFirst = fals
     }
   }
 
+  // 静默处理：切换信号源时的通知，不需要弹窗
   if (notifyMessage) {
-    ElMessage.info({
-      message: notifyMessage,
-      duration: 2000
-    })
+    console.log('切换信号源:', notifyMessage)
   }
 }
 
@@ -510,6 +537,7 @@ const applySignal = (signal, index = 0) => {
   }
 
   activeSignalIndex.value = index
+  streamRetryCount.value = 0
 
   if (signal.sessionCookies) {
     sessionCookies.value = signal.sessionCookies
@@ -540,20 +568,14 @@ const switchSignal = (index) => {
   loading.value = true
   applySignal(target, index)
 
-  ElMessage.success({
-    message: `已切换至${target.label || `线路${index + 1}`}`,
-    duration: 1500
-  })
+  // 静默处理：切换成功，直接播放，不需要弹窗
 }
 
 // 播放器加载完成
 const onPlayerLoad = () => {
   loading.value = false
   console.log('✅ 播放器加载完成')
-  ElMessage.success({
-    message: '播放器加载完成',
-    duration: 2000
-  })
+  // 静默处理：成功时直接播放，不需要弹窗提示
 }
 
 // 播放器加载错误
@@ -561,10 +583,7 @@ const onPlayerError = () => {
   loading.value = false
   console.error('❌ 播放器加载失败')
   
-  ElMessage.error({
-    message: '播放器加载失败，请重试',
-    duration: 3000
-  })
+    showError('播放器加载失败，请刷新页面或检查网络连接')
 }
 
 // 拦截JRKAN弹窗
@@ -620,19 +639,13 @@ const switchChannel = async (channelIndex) => {
           iframe.src = result.playUrl
           console.log(`✅ 已切换到高清直播频道 ${channelIndex}`)
           
-          ElMessage.success({
-            message: `已切换到高清直播频道${channelIndex}`,
-            duration: 2000
-          })
+          // 静默处理：切换成功，直接播放，不需要弹窗
         }
       }
     }
   } catch (error) {
     console.error('❌ 切换频道失败:', error.message)
-    ElMessage.error({
-      message: '切换频道失败，请重试',
-      duration: 3000
-    })
+    showError('切换频道失败，请刷新页面或稍后重试')
   }
 }
 
@@ -679,11 +692,7 @@ const validateStreamContent = () => {
           console.warn(`⚠️ 信号源内容不匹配！期望: 蒂华纳女足 vs 蒙特雷女足，实际: ${actualHomeTeam} vs ${actualAwayTeam}`)
           
           // 显示警告信息
-          ElMessage.warning({
-            message: `检测到信号源内容不匹配：${actualHomeTeam} vs ${actualAwayTeam}`,
-            duration: 5000,
-            showClose: true
-          })
+          showWarning(`检测到信号源内容不匹配：当前播放的是 ${actualHomeTeam} vs ${actualAwayTeam}，请检查是否选择了正确的比赛`)
         } else {
           console.log(`✅ 信号源内容匹配: ${actualHomeTeam} vs ${actualAwayTeam}`)
         }
@@ -776,62 +785,36 @@ const toggleFullscreen = () => {
 
 // 流播放错误处理 - 尝试重新获取流地址
 const onStreamError = async (errorData) => {
-  console.log('❌ 纯流播放失败，尝试重新获取流地址', errorData)
-  loading.value = false
+  console.log('⚠️ 纯流播放出现异常，进入等待模式', errorData)
+  loading.value = true
   handlePlaybackStall()
 
-  const nextIndex = activeSignalIndex.value + 1
-  if (availableSignals.value[nextIndex]) {
-    console.log('🔄 当前信号不可用，尝试切换到备用线路', availableSignals.value[nextIndex])
-    loading.value = true
-    applySignal(availableSignals.value[nextIndex], nextIndex)
-    ElMessage.warning({
-      message: `当前线路不可用，已切换至${availableSignals.value[nextIndex].label || `线路${nextIndex + 1}`}`,
-      duration: 2000
-    })
+  const retryAttempt = Math.min(streamRetryCount.value + 1, STREAM_RETRY_MAX)
+  streamRetryCount.value = retryAttempt
+  const delay = STREAM_RETRY_BASE_DELAY * retryAttempt
+  console.log(`⏳ 第 ${retryAttempt}/${STREAM_RETRY_MAX} 次自动等待重试，延迟 ${delay}ms`)
+  await new Promise(resolve => setTimeout(resolve, delay))
+  const newStreamUrl = await extractM3u8Stream(true)
+
+  if (newStreamUrl && newStreamUrl !== extractedStreamUrl.value) {
+    console.log('✅ 自动等待重试成功，继续播放:', newStreamUrl)
+    extractedStreamUrl.value = newStreamUrl
+    streamFailed.value = false
+    loading.value = false
+    resetStallCounter()
+    showInfo(`检测到暂时性波动，已自动恢复（第 ${retryAttempt} 次）`)
     return
   }
 
-  // 检查是否是auth_key过期错误，如果是，立即重试
-  const isAuthKeyExpired = errorData?.isAuthKeyExpired || errorData?.shouldRetry
-  if (isAuthKeyExpired) {
-    console.log('🔄 检测到auth_key过期，立即重新获取流地址...')
-    
-    ElMessage.info({
-      message: '检测到流地址过期，正在重新获取...',
-      duration: 2000
-    })
-  }
-  
-  // 尝试重新提取m3u8流地址
-  console.log('🔄 尝试重新提取流地址...')
-  const newStreamUrl = await extractM3u8Stream(true)
-  
-  if (newStreamUrl && newStreamUrl !== extractedStreamUrl.value) {
-    console.log('✅ 获取到新的流地址，重新播放:', newStreamUrl)
-    extractedStreamUrl.value = newStreamUrl
-    streamFailed.value = false
-    
-    ElMessage.success({
-      message: '已重新获取流地址，正在尝试播放...',
-      duration: 3000
-    })
+  if (retryAttempt < STREAM_RETRY_MAX) {
+    console.log('🔁 等待下一次自动重试，保持加载状态')
     return
   }
-  
-  console.log('❌ 重新获取流地址失败，显示无法播放提示')
-  
-  // 使用nextTick确保响应式更新
-  streamFailed.value = true
-  extractedStreamUrl.value = ''
-  
-  await nextTick()
-  console.log('🔄 streamFailed已更新为:', streamFailed.value)
-  
-  ElMessage.error({
-    message: '视频流无法播放，请稍后重试或选择其他比赛',
-    duration: 5000
-  })
+
+  console.log('❌ 自动重试达到上限，保持等待供用户手动处理')
+  streamFailed.value = false
+  loading.value = true
+  showWarning('当前线路仍在恢复中，如长时间无响应请手动切换线路或刷新')
 }
 
 // 流播放成功处理
@@ -840,11 +823,7 @@ const onStreamSuccess = () => {
   streamFailed.value = false
   loading.value = false
   resetStallCounter()
-  
-  ElMessage.success({
-    message: '纯流播放成功',
-    duration: 2000
-  })
+  // 静默处理：成功时直接播放，不需要弹窗提示
 }
 
 const onStreamStall = () => {
@@ -855,10 +834,7 @@ const onStreamStall = () => {
 const retryStream = async () => {
   console.log('🔄 重新尝试播放')
   if (noSignal.value) {
-    ElMessage.warning({
-      message: '当前暂无可用直播源',
-      duration: 2000
-    })
+    showWarning('当前比赛暂无可用直播源，请稍后再试或选择其他比赛')
     return
   }
   
@@ -869,10 +845,7 @@ const retryStream = async () => {
   // 重新提取流地址
   await extractM3u8Stream(true)
   
-  ElMessage.info({
-    message: '正在重新尝试播放...',
-    duration: 2000
-  })
+    // 静默处理：后台自动重试，不需要告知用户
 }
 
 // 提取m3u8流地址
@@ -912,33 +885,6 @@ const extractM3u8Stream = async (force = false) => {
     
     console.log('🎯 提取到streamId:', targetStreamId)
 
-    if (!force) {
-      const cached = loadCachedSignals(targetStreamId)
-      if (cached) {
-        console.log('⚡ 使用本地缓存的信号源')
-        if (Array.isArray(cached.signals) && cached.signals.length > 0) {
-          const sortedCached = sortSignalsByMode(cached.signals, bandwidthMode.value)
-          availableSignals.value = sortedCached
-          const applied = applySignal(sortedCached[0], 0)
-          loading.value = false
-          return applied
-        }
-        if (cached.streamUrl) {
-          const signal = {
-            label: cached.label || '线路1',
-            playUrl: cached.streamUrl,
-            sourceUrl: cached.sourceUrl || playPageUrl.value || playUrl.value,
-            sessionCookies: cached.sessionCookies || '',
-            quality: cached.quality || ''
-          }
-          availableSignals.value = [signal]
-          const applied = applySignal(signal, 0)
-          loading.value = false
-          return applied
-        }
-      }
-    }
-    
     // 调用后端API提取流地址
     const response = await fetch('/api/jrkan/extract-stream', {
       method: 'POST',
@@ -970,9 +916,6 @@ const extractM3u8Stream = async (force = false) => {
             const sortedSignals = sortSignalsByMode(formattedSignals, bandwidthMode.value)
             availableSignals.value = sortedSignals
             const applied = applySignal(sortedSignals[0], 0)
-            saveCachedSignals(targetStreamId, {
-              signals: sortedSignals
-            })
             return applied
           }
         }
@@ -987,13 +930,6 @@ const extractM3u8Stream = async (force = false) => {
           }
           availableSignals.value = [singleSignal]
           const applied = applySignal(singleSignal, 0)
-          saveCachedSignals(targetStreamId, {
-            streamUrl: singleSignal.playUrl,
-            sourceUrl: singleSignal.sourceUrl,
-            sessionCookies: singleSignal.sessionCookies,
-            label: singleSignal.label,
-            quality: singleSignal.quality
-          })
           return applied
         }
       }
@@ -1017,7 +953,7 @@ onMounted(async () => {
       streamFailed.value = true
       return
     }
-    ElMessage.error('播放链接无效')
+    showError('播放链接无效，请返回比赛列表重新选择')
     router.push('/')
     return
   }
@@ -1035,7 +971,7 @@ onMounted(async () => {
       console.log('✅ 使用页面提供的m3u8播放')
     } else {
       streamFailed.value = true
-      ElMessage.warning('未找到可用的直播源')
+      showWarning('未找到可用的直播源，请稍后再试或选择其他比赛')
     }
   }
 
@@ -1055,36 +991,6 @@ onBeforeUnmount(() => {
   }
 })
 
-function loadCachedSignals(targetStreamId) {
-  try {
-    const raw = sessionStorage.getItem(`${SIGNAL_CACHE_PREFIX}${targetStreamId}`)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (!parsed || !parsed.timestamp) return null
-    if (Date.now() - parsed.timestamp > SIGNAL_CACHE_TTL) {
-      sessionStorage.removeItem(`${SIGNAL_CACHE_PREFIX}${targetStreamId}`)
-      return null
-    }
-    return parsed.payload || null
-  } catch (error) {
-    console.warn('读取信号缓存失败:', error)
-    return null
-  }
-}
-
-function saveCachedSignals(targetStreamId, payload) {
-  if (!targetStreamId || !payload) return
-  try {
-    const record = {
-      timestamp: Date.now(),
-      payload
-    }
-    sessionStorage.setItem(`${SIGNAL_CACHE_PREFIX}${targetStreamId}`, JSON.stringify(record))
-  } catch (error) {
-    console.warn('写入信号缓存失败:', error)
-  }
-}
-
 function loadPlayerPayload(streamId) {
   if (!streamId) return null
   try {
@@ -1103,8 +1009,8 @@ function loadPlayerPayload(streamId) {
 
 .player-page {
   position: relative;
-  width: 60vw;
-  max-width: 960px;
+  width: 90vw;
+  max-width: 1400px;
   background: transparent;
   display: flex;
   flex-direction: column;
@@ -1112,6 +1018,11 @@ function loadPlayerPayload(streamId) {
   align-items: center;
   margin: 32px auto 48px;
   padding: 0;
+}
+
+.player-chat-section {
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 .match-info-card {

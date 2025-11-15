@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/database');
+const { notifyExpertPlanPublished } = require('../utils/notifications');
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 10;
@@ -240,11 +241,33 @@ router.post('/', async (req, res) => {
     ];
 
     const [result] = await pool.query(insertSQL, params);
+    const planId = result.insertId;
+
+    // 如果方案已发布，通知关注该专家的用户
+    if (status === 'published' && author) {
+      // 根据author查找专家ID（假设author是用户名）
+      try {
+        const [users] = await pool.query(
+          'SELECT id FROM users WHERE username = ? AND role = ?',
+          [author, 'expert']
+        );
+        
+        if (users.length > 0) {
+          const expertId = users[0].id;
+          // 异步发送通知，不阻塞响应
+          notifyExpertPlanPublished(expertId, planId, title).catch(err => {
+            console.error('发送通知失败:', err);
+          });
+        }
+      } catch (error) {
+        console.error('查找专家ID失败:', error);
+      }
+    }
 
     res.json({
       code: 200,
       message: '方案创建成功',
-      data: { id: result.insertId }
+      data: { id: planId }
     });
   } catch (error) {
     console.error('❌ 创建方案失败:', error);

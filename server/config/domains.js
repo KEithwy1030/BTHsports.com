@@ -8,19 +8,26 @@ const JRKAN_DOMAINS = [
     url: 'http://play.jgdhds.com', 
     priority: 1, 
     status: 'active',
-    name: '直播②域名',
+    name: '云直播②（jgdhds）',
     successCount: 0,
     failCount: 0
   },
   { 
-    url: 'http://play.jgdhds.com', 
+    url: 'http://play.sportsteam7777.com', 
     priority: 2, 
     status: 'active',
-    name: '主域名',
+    name: '云直播③（sportsteam7777）',
     successCount: 0,
     failCount: 0
   },
-  // 可以动态添加更多域名
+  { 
+    url: 'http://play.sportsteam368.com', 
+    priority: 3, 
+    status: 'active',
+    name: '云直播①（sportsteam368）',
+    successCount: 0,
+    failCount: 0
+  }
 ];
 
 /**

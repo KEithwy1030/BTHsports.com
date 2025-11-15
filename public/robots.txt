@@ -1,0 +1,51 @@
+# robots.txt for 百体汇
+# 允许所有搜索引擎抓取主要页面
+
+User-agent: *
+Allow: /
+Allow: /match/
+Allow: /plan/
+
+# 禁止抓取 API 和后台管理
+Disallow: /api/
+Disallow: /admin/
+
+# 禁止抓取用户相关页面（这些页面对SEO价值不大）
+Disallow: /login
+Disallow: /register
+Disallow: /profile
+
+# 允许抓取主要页面
+Allow: /
+Allow: /plan
+Allow: /experts
+
+# 针对主要搜索引擎的优化
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Baiduspider
+Allow: /
+
+# AI 大模型爬虫（允许索引）
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+# Sitemap 位置（部署后填写实际域名）
+# Sitemap: https://your-domain.com/sitemap.xml
+

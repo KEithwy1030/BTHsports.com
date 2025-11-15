@@ -1,0 +1,88 @@
+# 生产模式 Docker Compose（模拟 Zeabur 环境）
+services:
+  # 主应用服务（模拟 Zeabur 部署）
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-7001}:7001"
+    environment:
+      # Zeabur 会自动注入这些变量
+      NODE_ENV: production
+      PORT: 7001
+      # 数据库配置（Zeabur 会自动注入）
+      DB_HOST: mysql
+      DB_PORT: 3306  # 容器内部端口，外部映射到 3307
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-k19941030}
+      DB_NAME: ${DB_NAME:-BTHsprots}
+      # CORS 配置
+      CORS_ORIGINS: "*"
+      # 浏览器功能禁用（云环境）
+      ENABLE_BROWSER: "false"
+      # JWT 配置
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      JWT_EXPIRES_IN: 7d
+      REFRESH_TOKEN_EXPIRES_IN: 30d
+      # SEO 配置（部署后必须设置实际域名）
+      SITE_URL: ${SITE_URL:-https://your-domain.com}
+      DOMAIN: ${DOMAIN:-${SITE_URL:-https://your-domain.com}}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:7001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # MySQL 服务（模拟 Zeabur MySQL 服务）
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-k19941030}
+      MYSQL_DATABASE: ${DB_NAME:-BTHsprots}
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    # 不映射外部端口，只在容器内部使用（避免端口冲突）
+    # 应用通过服务名 mysql:3306 连接
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./server/config:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pk19941030"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # Redis 服务（可选，模拟 Zeabur Redis 服务）
+  redis:
+    image: redis:7-alpine
+    # 不映射外部端口，只在容器内部使用（避免端口冲突）
+    # 应用通过服务名 redis:6379 连接
+    # 如需外部访问，取消下面的注释并修改端口
+    # ports:
+    #   - "6380:6379"  # 使用 6380 避免与其他项目冲突
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+volumes:
+  mysql_data:
+  redis_data:
+

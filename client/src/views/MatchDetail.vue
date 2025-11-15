@@ -8,7 +8,7 @@
           返回
         </el-button>
         
-        <!-- 比赛信息展示区域 - 按popozhibo样式 -->
+        <!-- 比赛信息展示区域 -->
         <div v-if="match" class="match-info-display">
           <div class="match-teams">
             <!-- 主队 -->
@@ -50,21 +50,31 @@
         </div>
       </div>
 
-      <!-- 视频播放器 -->
-      <div v-if="sources.length > 0" class="player-section">
-        <VideoPlayer
-          v-if="sources.length > 0"
-          :stream-url="getBestStreamUrl()"
-          :stream-type="getStreamType()"
-        />
-      </div>
+      <!-- 视频播放器和聊天区 -->
+      <el-row :gutter="20" class="player-chat-section">
+        <!-- 视频播放器 -->
+        <el-col :xs="24" :sm="24" :md="16" :lg="16" :xl="16">
+          <div v-if="sources.length > 0" class="player-section">
+            <VideoPlayer
+              v-if="sources.length > 0"
+              :stream-url="getBestStreamUrl()"
+              :stream-type="getStreamType()"
+            />
+          </div>
 
-      <!-- 无信号源提示 -->
-      <div v-else class="no-sources">
-        <el-empty description="暂无可用信号源">
-          <el-button type="primary" @click="refreshSources">刷新信号源</el-button>
-        </el-empty>
-      </div>
+          <!-- 无信号源提示 -->
+          <div v-else class="no-sources">
+            <el-empty description="暂无可用信号源">
+              <el-button type="primary" @click="refreshSources">刷新信号源</el-button>
+            </el-empty>
+          </div>
+        </el-col>
+
+        <!-- 聊天区 -->
+        <el-col :xs="24" :sm="24" :md="8" :lg="8" :xl="8">
+          <MatchChat v-if="match" :match-id="getMatchIdForChat()" />
+        </el-col>
+      </el-row>
 
       <!-- 信号源列表 -->
       <div v-if="sources.length > 0" class="sources-section">
@@ -160,8 +170,9 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { matchesApi, liveApi } from '@/api'
 import VideoPlayer from '@/components/VideoPlayer.vue'
+import MatchChat from '@/components/MatchChat.vue'
 import { ArrowLeft, Link, Check, Close } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { showError, showWarning, showSuccess } from '@/utils/message'
 
 const props = defineProps({
   id: {
@@ -208,7 +219,7 @@ const fetchMatchDetail = async () => {
     
   } catch (error) {
     console.error('获取比赛详情失败:', error)
-    ElMessage.error('获取比赛详情失败')
+    showError('获取比赛详情失败，请刷新页面重试')
   } finally {
     loading.value = false
   }
@@ -222,14 +233,14 @@ const refreshSources = async () => {
     sources.value = data.data.sources || []
     
     if (sources.value.length === 0) {
-      ElMessage.warning('暂无可用信号源')
+      showWarning('当前比赛暂无可用信号源，请稍后再试')
     } else {
-      ElMessage.success(`找到 ${sources.value.length} 个信号源`)
+      showSuccess(`成功找到 ${sources.value.length} 个可用信号源`)
     }
     
   } catch (error) {
     console.error('刷新信号源失败:', error)
-    ElMessage.error('刷新信号源失败')
+    showError('刷新信号源失败，请检查网络连接或稍后重试')
   } finally {
     loading.value = false
   }
@@ -238,7 +249,7 @@ const refreshSources = async () => {
 // 选择信号源
 const selectSource = (source) => {
   if (!source.isActive) {
-    ElMessage.warning('该信号源暂不可用')
+    showWarning('该信号源当前不可用，请选择其他信号源')
     return
   }
   selectedSourceId.value = source.id
@@ -287,13 +298,13 @@ const handleSourceChanged = (source) => {
 
 // 处理播放器准备就绪
 const handlePlayerReady = () => {
-  ElMessage.success('播放器已准备就绪')
+  // 静默处理：成功时直接播放，不需要弹窗提示
 }
 
 // 处理播放器错误
 const handlePlayerError = (error) => {
   console.error('播放器错误:', error)
-  ElMessage.error('播放失败，请尝试其他信号源')
+  showError('视频播放失败，请尝试切换其他信号源')
 }
 
 // 跳转到其他比赛
@@ -366,6 +377,22 @@ const getSourceTypeText = (type) => {
     'proxy': '代理线路'
   }
   return types[type] || type
+}
+
+// 获取用于聊天的比赛ID
+// 注意：聊天功能需要数据库中的match.id，而不是爬虫的matchId
+// 如果match对象有数据库id则使用，否则使用props.id（需要确保是数据库id）
+const getMatchIdForChat = () => {
+  // 优先使用match对象中的数据库id
+  if (match.value && match.value.db_id) {
+    return match.value.db_id
+  }
+  // 如果没有，尝试使用match.id（可能是数据库id）
+  if (match.value && match.value.id) {
+    return match.value.id
+  }
+  // 最后使用props.id（需要确保这是数据库中的id）
+  return props.id
 }
 
 // 监听路由参数变化
@@ -465,8 +492,12 @@ onMounted(() => {
   align-items: center;
 }
 
-.player-section {
+.player-chat-section {
   margin-bottom: 30px;
+}
+
+.player-section {
+  margin-bottom: 0;
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);

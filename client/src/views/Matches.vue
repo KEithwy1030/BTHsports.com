@@ -165,6 +165,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { matchesApi } from '@/api'
 import { Calendar, Search, Refresh, VideoPlay } from '@element-plus/icons-vue'
+import { showError } from '@/utils/message'
 
 const router = useRouter()
 const route = useRoute()
@@ -205,7 +206,7 @@ const fetchMatches = async () => {
     
   } catch (error) {
     console.error('获取比赛列表失败:', error)
-    ElMessage.error('获取比赛数据失败')
+    showError('获取比赛数据失败，请刷新页面重试')
   } finally {
     loading.value = false
   }
@@ -235,7 +236,7 @@ const handleSearch = async () => {
     pagination.value = { total: data.length, page: 1, limit: 50, pages: 1 }
   } catch (error) {
     console.error('搜索比赛失败:', error)
-    ElMessage.error('搜索失败')
+    showError('搜索失败，请检查搜索关键词或稍后重试')
   } finally {
     loading.value = false
   }

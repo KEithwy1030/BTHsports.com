@@ -1,0 +1,116 @@
+/**
+ * 统一的弹窗消息样式
+ * 要求：更大、更醒目、不同颜色区分
+ */
+
+/* 成功消息 - 绿色 */
+.custom-message-success {
+  min-width: 300px !important;
+  padding: 18px 24px !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 20px rgba(67, 194, 58, 0.3) !important;
+  background-color: #f0f9ff !important;
+  border-left: 4px solid #67c23a !important;
+}
+
+.custom-message-success .el-message__content {
+  color: #67c23a !important;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+
+.custom-message-success .el-message__icon {
+  font-size: 20px !important;
+  color: #67c23a !important;
+}
+
+/* 错误消息 - 红色 */
+.custom-message-error {
+  min-width: 300px !important;
+  padding: 18px 24px !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 20px rgba(245, 108, 108, 0.3) !important;
+  background-color: #fef0f0 !important;
+  border-left: 4px solid #f56c6c !important;
+}
+
+.custom-message-error .el-message__content {
+  color: #f56c6c !important;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+
+.custom-message-error .el-message__icon {
+  font-size: 20px !important;
+  color: #f56c6c !important;
+}
+
+/* 警告消息 - 橙色 */
+.custom-message-warning {
+  min-width: 300px !important;
+  padding: 18px 24px !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 20px rgba(230, 162, 60, 0.3) !important;
+  background-color: #fdf6ec !important;
+  border-left: 4px solid #e6a23c !important;
+}
+
+.custom-message-warning .el-message__content {
+  color: #e6a23c !important;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+
+.custom-message-warning .el-message__icon {
+  font-size: 20px !important;
+  color: #e6a23c !important;
+}
+
+/* 信息消息 - 蓝色 */
+.custom-message-info {
+  min-width: 300px !important;
+  padding: 18px 24px !important;
+  font-size: 16px !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 20px rgba(144, 147, 153, 0.3) !important;
+  background-color: #f4f4f5 !important;
+  border-left: 4px solid #909399 !important;
+}
+
+.custom-message-info .el-message__content {
+  color: #606266 !important;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+}
+
+.custom-message-info .el-message__icon {
+  font-size: 20px !important;
+  color: #909399 !important;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .custom-message-success,
+  .custom-message-error,
+  .custom-message-warning,
+  .custom-message-info {
+    min-width: 280px !important;
+    padding: 16px 20px !important;
+    font-size: 15px !important;
+  }
+  
+  .custom-message-success .el-message__content,
+  .custom-message-error .el-message__content,
+  .custom-message-warning .el-message__content,
+  .custom-message-info .el-message__content {
+    font-size: 15px !important;
+  }
+}
+

@@ -84,7 +84,62 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
+// JSON 解析中间件，添加错误处理
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    try {
+      JSON.parse(buf.toString());
+    } catch (e) {
+      console.error('JSON 解析错误:', e.message);
+      console.error('原始数据:', buf.toString().substring(0, 200));
+      throw new Error('Invalid JSON');
+    }
+  }
+}));
+
+// JSON 解析错误处理（必须在 express.json() 之后）
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.error('========== JSON 解析错误 ==========');
+    console.error('错误消息:', err.message);
+    console.error('请求路径:', req.path);
+    console.error('请求方法:', req.method);
+    console.error('Content-Type:', req.headers['content-type']);
+    console.error('Content-Length:', req.headers['content-length']);
+    return res.status(400).json({
+      success: false,
+      message: '请求数据格式错误，请检查 JSON 格式',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+  next(err);
+});
+
+// 请求日志中间件（开发环境）- 必须在路由之前
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      const timestamp = new Date().toISOString();
+      console.log(`\n[${timestamp}] ========== API 请求 ==========`);
+      console.log(`${req.method} ${req.path}`);
+      console.log('请求头 Origin:', req.headers.origin);
+      console.log('Content-Type:', req.headers['content-type']);
+      if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+        // 记录原始请求体（如果可用）
+        if (req.body && Object.keys(req.body).length > 0) {
+          const bodyStr = JSON.stringify(req.body);
+          console.log('请求体:', bodyStr.length > 500 ? bodyStr.substring(0, 500) + '...' : bodyStr);
+        } else {
+          console.log('⚠️ 请求体为空或未解析');
+          console.log('原始请求数据长度:', req.headers['content-length']);
+        }
+      }
+      console.log('==========================================\n');
+    }
+    next();
+  });
+}
 
 // 健康检查（最早处理）
 app.get('/health', (req, res) => {
@@ -155,6 +210,14 @@ if (fs.existsSync(uploadsPath)) {
   console.log('📁 用户上传文件目录:', uploadsPath);
 }
 
+// SEO 路由（必须在 API 路由之前，因为 robots.txt 和 sitemap.xml 是公开的）
+app.use('/api/seo', require('./routes/seo'));
+
+// robots.txt 直接访问（优先级高于静态文件）
+app.get('/robots.txt', (req, res) => {
+  res.redirect('/api/seo/robots.txt');
+});
+
 // API 路由
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/user', require('./routes/user'));
@@ -167,6 +230,25 @@ app.use('/api/jrkan', require('./routes/jrkan'));
 app.use('/api/signals', require('./routes/signals'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/plans', require('./routes/plans'));
+
+// 全局错误处理中间件（必须在所有路由之后）
+app.use((err, req, res, next) => {
+  console.error('========== 全局错误处理 ==========');
+  console.error('错误类型:', err.constructor.name);
+  console.error('错误消息:', err.message);
+  console.error('请求路径:', req.path);
+  console.error('请求方法:', req.method);
+  console.error('错误堆栈:', err.stack);
+  if (err.code) console.error('错误代码:', err.code);
+  if (err.sqlState) console.error('SQL 状态:', err.sqlState);
+  console.error('========== 错误结束 ==========');
+  
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || '服务器内部错误',
+    error: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
 
 // SPA 路由支持 - 所有其他路由返回 index.html（Vue Router 处理）
 app.get('*', (req, res, next) => {
@@ -208,14 +290,6 @@ app.listen(PORT, () => {
   console.log('🔄 启动信号源自动刷新服务...');
   signalRefresher.startAutoRefresh();
   
-  // 立即执行一次爬取
-  console.log('🔄 立即执行首次爬取...');
-  crawler.crawlPopozhiboMatches().then(matches => {
-    console.log(`✅ 首次爬取完成，获取到 ${matches.length} 场比赛`);
-  }).catch(error => {
-    console.error('❌ 首次爬取失败:', error.message);
-  });
-
   // 启动聊天记录清理定时任务（每小时执行一次）
   console.log('🧹 启动聊天记录清理定时任务...');
   const { cleanupExpiredChatMessages } = require('./routes/chat');

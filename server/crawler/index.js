@@ -8,24 +8,7 @@ async function main() {
   // 启动定时爬取
   crawler.startScheduledCrawling();
   
-  // 立即执行一次爬取
-  try {
-    console.log('🔄 执行初始爬取...');
-    const matches = await crawler.crawlPopozhiboMatches();
-    await crawler.saveMatches(matches);
-    
-    // 爬取正在直播比赛的信号源
-    const liveMatches = matches.filter(m => m.status === 'live');
-    for (const match of liveMatches) {
-      const sources = await crawler.crawlMatchStreamSources(match.matchId);
-      await crawler.saveStreamSources(match.matchId, sources);
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-    
-    console.log('✅ 初始爬取完成');
-  } catch (error) {
-    console.error('❌ 初始爬取失败:', error.message);
-  }
+  console.log('ℹ️ StreamCrawler 已启用 JRKAN 专用模式（不再依赖第三方来源）');
   
   // 优雅关闭
   process.on('SIGINT', async () => {

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { showError } from '@/utils/message'
 
 // 创建axios实例
 const api = axios.create({
@@ -12,6 +13,11 @@ const api = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   config => {
+    // 添加 Token 到请求头
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     console.log('发送请求:', config.url, '完整URL:', config.baseURL + config.url)
     return config
   },
@@ -46,12 +52,49 @@ api.interceptors.response.use(
       }
       return response  // 返回完整的axios响应对象
     } else {
-      console.error('API错误:', data.message)
-      return Promise.reject(new Error(data.message))
+      // 如果 success 为 false，提取错误消息
+      const errorMessage = data.message || '请求失败'
+      console.error('API错误:', errorMessage)
+      const error = new Error(errorMessage)
+      error.response = response
+      return Promise.reject(error)
     }
   },
   error => {
-    console.error('响应错误:', error.message)
+    console.error('响应错误:', error)
+    
+    // 处理 HTTP 错误响应
+    if (error.response) {
+      const { data, status } = error.response
+      console.error('错误响应详情:', {
+        status,
+        data,
+        message: data?.message,
+        error: data?.error
+      })
+      // 优先使用后端返回的 message，如果没有则使用 error 字段，最后才使用默认消息
+      const errorMessage = data?.message || data?.error || error.message || '请求失败，请稍后重试'
+      
+      // 处理 401 未授权错误
+      if (status === 401) {
+        // 清除本地存储的 token
+        localStorage.removeItem('token')
+        localStorage.removeItem('refreshToken')
+        localStorage.removeItem('user')
+        
+        // 如果不在登录页面，跳转到登录页
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+          window.location.href = '/login'
+        }
+      }
+      
+      // 创建新的错误对象，确保消息正确传递
+      const newError = new Error(errorMessage)
+      newError.response = error.response
+      return Promise.reject(newError)
+    }
+    
+    // 网络错误或其他错误
     return Promise.reject(error)
   }
 )
@@ -144,6 +187,114 @@ export const articlesApi = {
     return api.get('/articles/by-match', {
       params: { ids }
     })
+  }
+}
+
+// 用户认证相关API
+export const authApi = {
+  // 获取图形验证码
+  getCaptcha() {
+    return api.get('/auth/captcha')
+  },
+  
+  // 用户注册
+  register(data) {
+    return api.post('/auth/register', data)
+  },
+  
+  // 用户登录
+  login(data) {
+    return api.post('/auth/login', data)
+  },
+  
+  // 获取当前用户信息
+  getMe() {
+    return api.get('/auth/me')
+  },
+  
+  // 刷新 Token
+  refreshToken(refreshToken) {
+    return api.post('/auth/refresh', { refreshToken })
+  },
+  
+  // 用户登出
+  logout() {
+    return api.post('/auth/logout')
+  }
+}
+
+// 用户资料相关API
+export const userApi = {
+  // 获取用户资料
+  getProfile() {
+    return api.get('/user/profile')
+  },
+  
+  // 更新用户资料
+  updateProfile(data) {
+    return api.put('/user/profile', data)
+  },
+  
+  // 上传头像
+  uploadAvatar(file) {
+    const formData = new FormData()
+    formData.append('avatar', file)
+    return api.post('/user/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  },
+  
+  // 修改密码
+  changePassword(data) {
+    return api.post('/user/password', data)
+  }
+}
+
+// 关注专家相关API
+export const followApi = {
+  // 获取专家列表
+  getExperts(params = {}) {
+    return api.get('/follow/experts', { params })
+  },
+  
+  // 获取当前用户关注的专家列表
+  getFollowing() {
+    return api.get('/follow/following')
+  },
+  
+  // 关注专家
+  followExpert(expertId) {
+    return api.post(`/follow/${expertId}`)
+  },
+  
+  // 取消关注专家
+  unfollowExpert(expertId) {
+    return api.delete(`/follow/${expertId}`)
+  },
+  
+  // 检查是否关注了某个专家
+  checkFollowing(expertId) {
+    return api.get(`/follow/check/${expertId}`)
+  },
+  
+  // 批量检查关注状态
+  checkBatchFollowing(expertIds) {
+    return api.post('/follow/check-batch', { expertIds })
+  }
+}
+
+// 比赛聊天相关API
+export const chatApi = {
+  // 获取聊天历史消息
+  getHistory(matchId, limit = 50) {
+    return api.get(`/chat/${matchId}/history`, { params: { limit } })
+  },
+  
+  // 发送聊天消息
+  sendMessage(matchId, content) {
+    return api.post(`/chat/${matchId}/message`, { content })
   }
 }
 

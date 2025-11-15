@@ -114,6 +114,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { liveApi } from '@/api'
 import { VideoPlay, InfoFilled } from '@element-plus/icons-vue'
+import { showError } from '@/utils/message'
 
 const router = useRouter()
 const loading = ref(false)
@@ -130,7 +131,7 @@ const fetchLiveMatches = async () => {
     liveMatches.value = data || []
   } catch (error) {
     console.error('获取直播比赛失败:', error)
-    ElMessage.error('获取直播数据失败')
+    showError('获取直播数据失败，请刷新页面重试')
   } finally {
     loading.value = false
   }

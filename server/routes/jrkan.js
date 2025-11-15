@@ -7,7 +7,6 @@ const JRKANSignalCrawler = require('../crawler/JRKANSignalCrawler');
 const StreamIdMapper = require('../crawler/StreamIdMapper');
 const mappingDB = require('../utils/MappingDB');
 const DomainHealthChecker = require('../utils/DomainHealthChecker');
-const streamSessionStore = require('../utils/StreamSessionStore');
 const logger = require('../utils/logger');
 const router = express.Router();
 
@@ -304,25 +303,15 @@ router.get('/proxy-m3u8', async (req, res) => {
     let cookieHeader = decodeBase64Param(sessionToken);
     let refererHeader = decodeBase64Param(refererToken) || DEFAULT_REFERER;
 
-    const storedSession = streamSessionStore.get(streamId);
     let targetUrl = decodedUrl;
-    if (storedSession) {
-      refererHeader = storedSession.sourceUrl || refererHeader;
-      if (storedSession.playUrl) {
-        targetUrl = storedSession.playUrl;
-      }
-      if (!cookieHeader && storedSession.cookies) {
-        cookieHeader = storedSession.cookies;
-      }
-    }
 
     logger.info('proxy-m3u8 请求开始', { url: decodedUrl });
 
+    const shouldSendReferer = process.env.JRKAN_FORCE_REFERER === 'true';
     const requestConfigs = [
       {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': refererHeader,
           'Accept': 'application/vnd.apple.mpegurl, application/x-mpegURL, application/octet-stream, */*',
           'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
           'Cache-Control': 'no-cache',
@@ -339,7 +328,6 @@ router.get('/proxy-m3u8', async (req, res) => {
       {
         headers: {
           'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-          'Referer': refererHeader,
           'Accept': '*/*',
           'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
           'Cache-Control': 'no-cache',
@@ -359,12 +347,18 @@ router.get('/proxy-m3u8', async (req, res) => {
 
       for (let i = 0; i < requestConfigs.length; i++) {
         try {
+          const mergedHeaders = {
+            ...requestConfigs[i].headers,
+            ...headersOverride
+          };
+
+          if (shouldSendReferer && refererHeader) {
+            mergedHeaders['Referer'] = refererHeader;
+          }
+
           const mergedConfig = {
             ...requestConfigs[i],
-            headers: {
-              ...requestConfigs[i].headers,
-              ...headersOverride
-            }
+            headers: mergedHeaders
           };
           console.log(`🔄 尝试请求配置 ${i + 1}: ${targetUrl}`);
           response = await axios.get(targetUrl, mergedConfig);
@@ -393,17 +387,12 @@ router.get('/proxy-m3u8', async (req, res) => {
 
     const tryRefreshStream = async () => {
       if (!streamId) return null;
-      const sessionInfo = streamSessionStore.get(streamId);
-      const playPageUrl = sessionInfo?.sourceUrl || decodeBase64Param(refererToken) || `http://play.jgdhds.com/play/steam${streamId}.html`;
+      const inferredPlayPage = decodeBase64Param(refererToken) || `http://play.jgdhds.com/play/steam${streamId}.html`;
+      const playPageUrl = inferredPlayPage || targetUrl;
       logger.info('proxy-m3u8 准备刷新流地址', { streamId, playPageUrl });
 
       const refreshed = await signalCrawler.crawlSignal(playPageUrl);
       if (refreshed && refreshed.playUrl) {
-        streamSessionStore.set(streamId, {
-          playUrl: refreshed.playUrl,
-          cookies: refreshed.cookies,
-          sourceUrl: refreshed.sourceUrl || playPageUrl
-        });
         targetUrl = refreshed.playUrl;
         cookieHeader = refreshed.cookies || cookieHeader;
         refererHeader = refreshed.sourceUrl || refererHeader;
@@ -490,25 +479,22 @@ router.get('/proxy-segment', async (req, res) => {
     let cookieHeader = decodeBase64Param(sessionToken);
     let refererHeader = decodeBase64Param(refererToken) || DEFAULT_REFERER;
 
-    const storedSession = streamSessionStore.get(streamId);
-    if (storedSession) {
-      refererHeader = storedSession.sourceUrl || refererHeader;
-      if (!cookieHeader && storedSession.cookies) {
-        cookieHeader = storedSession.cookies;
-      }
+    const segmentHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      'Connection': 'keep-alive',
+      ...(cookieHeader ? { Cookie: cookieHeader } : {})
+    };
+
+    if (process.env.JRKAN_FORCE_REFERER === 'true' && refererHeader) {
+      segmentHeaders['Referer'] = refererHeader;
     }
 
     const response = await axios.get(decodedUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': refererHeader,
-        'Accept': '*/*',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'Connection': 'keep-alive',
-        ...(cookieHeader ? { Cookie: cookieHeader } : {})
-      },
+      headers: segmentHeaders,
       timeout: 15000,
       maxRedirects: 5,
       responseType: 'arraybuffer'
@@ -619,19 +605,44 @@ router.post('/get-play-url', async (req, res) => {
           });
         }
         
+        // 🚫 过滤"主播解说"的关键词
+        const excludeKeywords = ['主播', '解说', 'commentator', 'host'];
+        const isExcludedChannel = (channelName) => {
+          if (!channelName) return false;
+          const lowerName = channelName.toLowerCase();
+          return excludeKeywords.some(keyword => lowerName.includes(keyword.toLowerCase()));
+        };
+        
+        // 先过滤掉"主播解说"的映射
+        const filteredMappings = validMappings.filter(m => {
+          if (isExcludedChannel(m.channel_name)) {
+            console.log(`🚫 跳过"主播解说"映射: ${m.channel_name} (steamId: ${m.steam_id})`);
+            return false;
+          }
+          return true;
+        });
+        
+        if (filteredMappings.length === 0) {
+          console.error(`❌ 没有有效的映射数据(已过滤"主播解说"): ${streamId}`);
+          return res.json({
+            success: false,
+            message: '没有有效的信号源映射(已过滤"主播解说")'
+          });
+        }
+        
         // 智能选择策略：优先选择高清直播频道，按成功率排序
-        const hdMapping = validMappings.find(m => 
+        const hdMapping = filteredMappings.find(m => 
           m.channel_name && (
             m.channel_name.includes('高清') || 
             m.channel_name.includes('直播②') ||
             m.channel_index === 2
           )
-        ) || validMappings.find(m => 
-          m.channel_name && m.channel_name.includes('直播') && !m.channel_name.includes('主播解说')
+        ) || filteredMappings.find(m => 
+          m.channel_name && m.channel_name.includes('直播')
         );
         
         // 如果找不到高清频道，选择成功率最高的
-        mapping = hdMapping || validMappings.reduce((best, current) => {
+        mapping = hdMapping || filteredMappings.reduce((best, current) => {
           const currentRate = (current.success_count || 0) / ((current.success_count || 0) + (current.fail_count || 0) + 1);
           const bestRate = (best.success_count || 0) / ((best.success_count || 0) + (best.fail_count || 0) + 1);
           return currentRate > bestRate ? current : best;
@@ -721,12 +732,31 @@ router.post('/get-play-url', async (req, res) => {
           console.log(`   频道${idx + 1}: ${ch.name} (steamId: ${ch.steamId}, domain: ${ch.domain}, isValid: ${ch.isValid})`);
         });
         
-        // 过滤有效频道
-        const validChannels = targetMatch.channels.filter(channel => 
-          channel.steamId && 
-          /^\d{4,8}$/.test(channel.steamId) && 
-          channel.isValid !== false
-        );
+        // 🚫 过滤"主播解说"的关键词
+        const excludeKeywords = ['主播', '解说', 'commentator', 'host'];
+        const isExcludedChannel = (channelName) => {
+          if (!channelName) return false;
+          const lowerName = channelName.toLowerCase();
+          return excludeKeywords.some(keyword => lowerName.includes(keyword.toLowerCase()));
+        };
+        
+        // 过滤有效频道（排除"主播解说"）
+        const validChannels = targetMatch.channels.filter(channel => {
+          // 🚫 第一步：过滤"主播解说"
+          if (isExcludedChannel(channel.name)) {
+            console.log(`🚫 跳过"主播解说"频道: ${channel.name}`);
+            return false;
+          }
+          // 第二步：验证steamId格式
+          if (!channel.steamId || !/^\d{4,8}$/.test(channel.steamId)) {
+            return false;
+          }
+          // 第三步：检查有效性标记
+          if (channel.isValid === false) {
+            return false;
+          }
+          return true;
+        });
         
         console.log(`✅ 有效频道数量: ${validChannels.length}`);
         
@@ -742,9 +772,9 @@ router.post('/get-play-url', async (req, res) => {
           if (bestChannel) {
             console.log(`🎯 选择高清频道: ${bestChannel.name}`);
           } else {
-            // 第二优先级：普通直播频道（排除主播解说）
+            // 第二优先级：普通直播频道（已过滤主播解说，这里不再需要检查）
             bestChannel = validChannels.find(c => 
-              c.name && c.name.includes('直播') && !c.name.includes('主播解说')
+              c.name && c.name.includes('直播')
             );
             
             if (bestChannel) {
@@ -864,7 +894,24 @@ function formatChannels(channels) {
     return [];
   }
   
-  return channels.map((channel, index) => ({
+  // 🚫 过滤"主播解说"的关键词
+  const excludeKeywords = ['主播', '解说', 'commentator', 'host'];
+  const isExcludedChannel = (channelName) => {
+    if (!channelName) return false;
+    const lowerName = channelName.toLowerCase();
+    return excludeKeywords.some(keyword => lowerName.includes(keyword.toLowerCase()));
+  };
+  
+  // 过滤掉"主播解说"频道
+  const filteredChannels = channels.filter(channel => {
+    if (isExcludedChannel(channel.name)) {
+      console.log(`🚫 格式化时过滤掉"主播解说"频道: ${channel.name}`);
+      return false;
+    }
+    return true;
+  });
+  
+  return filteredChannels.map((channel, index) => ({
     name: channel.name || `直播${index + 1}`,
     url: channel.url || '#',
     quality: channel.quality || 'HD',
@@ -1131,45 +1178,26 @@ router.post('/extract-stream', async (req, res) => {
     }
     
     console.log(`🎬 提取流地址请求: streamId=${streamId}, playUrl=${playUrl}`)
-
-    if (!force) {
-      const cached = streamSessionStore.get(streamId)
-      if (cached && (cached.signals?.length || cached.playUrl)) {
-        console.log(`⚡ 直接命中缓存流地址: ${cached.playUrl}`)
-        logger.info('extract-stream 命中缓存', {
-          streamId,
-          durationMs: Date.now() - startedAt
-        })
-
-        return res.json({
-          success: true,
-          streamUrl: cached.playUrl || '',
-          sourceUrl: cached.sourceUrl || playUrl || '',
-          sessionCookies: cached.cookies || '',
-          signals: Array.isArray(cached.signals)
-            ? cached.signals
-                .filter(signal => signal && signal.playUrl)
-                .map((signal, index) => ({
-                  label: signal.label || `线路${index + 1}`,
-                  playUrl: signal.playUrl,
-                  sourceUrl: signal.sourceUrl || cached.sourceUrl || playUrl || '',
-                  type: signal.type || '',
-                  quality: signal.quality || '',
-                  sessionCookies: signal.cookies || ''
-                }))
-            : []
-        })
-      }
-    }
     
     // 构建完整的播放URL
     const fullPlayUrl = playUrl || `http://play.jgdhds.com/play/steam${streamId}.html`
     
     const signals = await signalCrawler.crawlAllSignals(fullPlayUrl)
     
-    if (signals && signals.length > 0) {
+    // 注意：过滤"主播解说"已在 extractChannelButtons 中完成
+    // 如果 crawlAllSignals 返回空数组，说明所有信号都是"主播解说"，已被过滤
+    if (!signals || signals.length === 0) {
+      console.log(`❌ 没有可用信号源（所有信号都是"主播解说"）: ${streamId}`);
+      logger.warn('extract-stream 所有信号都被过滤', { streamId, playUrl: fullPlayUrl });
+      return res.json({
+        success: false,
+        message: '没有可用的直播源（所有信号都是"主播解说"，已被过滤）'
+      });
+    }
+    
+    // 有可用信号源，继续处理
       const primary = signals[0]
-      console.log(`✅ 成功提取流地址: ${primary.playUrl}`)
+      console.log(`✅ 成功提取流地址: ${primary.playUrl} (共 ${signals.length} 个信号源)`)
       logger.info('extract-stream 成功', {
         streamId,
         playUrl: primary.playUrl,
@@ -1182,13 +1210,6 @@ router.post('/extract-stream', async (req, res) => {
         durationMs: Date.now() - startedAt,
         fromCache: false
       })
-      
-      streamSessionStore.set(streamId, {
-        playUrl: primary.playUrl,
-        cookies: primary.cookies,
-        sourceUrl: primary.sourceUrl || fullPlayUrl,
-        signals
-      })
 
       return res.json({
         success: true,
@@ -1197,30 +1218,43 @@ router.post('/extract-stream', async (req, res) => {
         quality: primary.quality,
         sourceUrl: primary.sourceUrl,
         sessionCookies: primary.cookies || '',
-        signals: signals.map((signal, index) => ({
-          label: signal.label || `线路${index + 1}`,
+        signals: (() => {
+          // 🎯 增强去重：去除相同URL的信号源
+          const seenUrls = new Set();
+          const uniqueSignals = [];
+          
+          for (const signal of signals) {
+            if (!signal || !signal.playUrl) continue;
+            
+            // 提取用于比较的URL（去除参数）
+            let urlForComparison = signal.playUrl;
+            try {
+              const url = new URL(signal.playUrl);
+              urlForComparison = `${url.protocol}//${url.host}${url.pathname}`;
+            } catch (e) {
+              urlForComparison = signal.playUrl.split('?')[0].split('#')[0];
+            }
+            
+            // 如果URL已存在，跳过
+            if (seenUrls.has(urlForComparison)) {
+              console.log(`🚫 过滤重复信号源: ${signal.label} - ${urlForComparison.substring(0, 80)}...`);
+              continue;
+            }
+            
+            seenUrls.add(urlForComparison);
+            uniqueSignals.push({
+              label: signal.label || `线路${uniqueSignals.length + 1}`,
           playUrl: signal.playUrl,
           sourceUrl: signal.sourceUrl,
           type: signal.type,
           quality: signal.quality,
           sessionCookies: signal.cookies || ''
-        }))
+            });
+          }
+          
+          return uniqueSignals;
+        })()
       })
-    } else {
-      console.log(`❌ 提取流地址失败: ${streamId}`)
-      logger.warn('extract-stream 失败', { streamId, playUrl: fullPlayUrl })
-      logger.info('extract-stream 耗时', {
-        streamId,
-        durationMs: Date.now() - startedAt,
-        fromCache: false,
-        success: false
-      })
-      
-      return res.json({
-        success: false,
-        message: '无法提取流地址'
-      })
-    }
   } catch (error) {
     console.error('❌ 提取流地址出错:', error.message)
     logger.error('extract-stream 异常', {

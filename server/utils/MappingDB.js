@@ -25,7 +25,21 @@ class MappingDB {
         time: matchInfo.time
       });
 
+      // 🚫 过滤"主播解说"的关键词
+      const excludeKeywords = ['主播', '解说', 'commentator', 'host'];
+      const isExcludedChannel = (channelName) => {
+        if (!channelName) return false;
+        const lowerName = channelName.toLowerCase();
+        return excludeKeywords.some(keyword => lowerName.includes(keyword.toLowerCase()));
+      };
+      
       for (const channel of channels) {
+        // 🚫 第一步过滤：在保存到数据库前就过滤掉"主播解说"
+        if (isExcludedChannel(channel.name)) {
+          console.log(`🚫 跳过"主播解说"频道，不保存到数据库: ${channel.name}`);
+          continue;
+        }
+        
         // 增强验证：检查steamId格式和频道有效性
         if (!channel.steamId || !channel.domain) {
           console.warn(`⚠️ 跳过无效频道: ${channel.name} (steamId: ${channel.steamId}, domain: ${channel.domain})`);
@@ -199,7 +213,7 @@ class MappingDB {
   async getMappingsToRefresh() {
     try {
       const sql = `
-        SELECT DISTINCT stream_id, steam_id, domain, full_url
+        SELECT stream_id, steam_id, domain, full_url, last_verified
         FROM stream_mappings
         WHERE last_verified > DATE_SUB(NOW(), INTERVAL 2 HOUR)
         AND (last_verified IS NULL OR last_verified < DATE_SUB(NOW(), INTERVAL 20 MINUTE))

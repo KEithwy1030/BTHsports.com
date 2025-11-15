@@ -101,11 +101,27 @@ class JRSKanCrawler {
         
         // 提取直播信号源链接 - 增强提取steamId和domain
         const channels = [];
+        const seenChannels = new Set(); // 用于去重：steamId+domain组合
+        
+        // SEO优化：过滤"主播解说"的关键词
+        const excludeKeywords = ['主播', '解说', 'commentator', 'host'];
+        const isExcludedChannel = (channelName) => {
+          if (!channelName) return false;
+          const lowerName = channelName.toLowerCase();
+          return excludeKeywords.some(keyword => lowerName.includes(keyword.toLowerCase()));
+        };
+        
         $ul.find('li a').each((i, a) => {
           const $a = $(a);
           const url = $a.attr('href');
           // 修复频道名称提取：从strong标签内获取，而不是直接从a标签
-          const name = $a.find('strong').text().trim() || $a.text().trim();
+          const name = ($a.find('strong').text().trim() || $a.text().trim()).replace(/\s+/g, ' ');
+          
+          // 🚫 第一步过滤：在提取时就过滤掉"主播解说"
+          if (isExcludedChannel(name)) {
+            console.log(`🚫 过滤掉"主播解说"频道: ${name}`);
+            return; // 跳过这个频道
+          }
           
           if (url && url.includes('play/steam')) {
             const fullUrl = url.startsWith('http') ? url : `http:${url}`;
@@ -131,6 +147,20 @@ class JRSKanCrawler {
             
             // 只有steamId有效时才添加频道
             if (steamId && domain) {
+              // 🎯 第二步去重：使用 steamId+domain 组合去重，避免重复线路
+              const channelKey = `${steamId}|${domain}`;
+              if (seenChannels.has(channelKey)) {
+                console.log(`🚫 跳过重复频道: ${name} (steamId: ${steamId}, domain: ${domain})`);
+                return; // 跳过重复的频道
+              }
+              seenChannels.add(channelKey);
+              
+              // 🚫 第三步检查：再次确认不是"主播解说"（防止名称提取错误）
+              if (isExcludedChannel(name)) {
+                console.log(`🚫 二次过滤"主播解说"频道: ${name}`);
+                return;
+              }
+              
               channels.push({
                 name: name || `直播${i + 1}`,
                 url: fullUrl,

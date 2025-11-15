@@ -5,46 +5,11 @@ const router = express.Router();
 
 // 手动触发爬取
 router.post('/trigger', async (req, res) => {
-  try {
-    const crawler = new StreamCrawler();
-    
-    console.log('🔄 手动触发爬取任务...');
-    
-    // 爬取比赛列表
-    const matches = await crawler.crawlPopozhiboMatches();
-    await crawler.saveMatches(matches);
-    
-    // 爬取正在直播比赛的信号源
-    const liveMatches = matches.filter(m => m.status === 'live');
-    let sourcesCount = 0;
-    
-    for (const match of liveMatches) {
-      const sources = await crawler.crawlMatchStreamSources(match.matchId);
-      await crawler.saveStreamSources(match.matchId, sources);
-      sourcesCount += sources.length;
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-    
-    await crawler.closeBrowser();
-    
-    res.json({
-      code: 200,
-      message: '爬取任务完成',
-      data: {
-        matchesFound: matches.length,
-        liveMatches: liveMatches.length,
-        sourcesFound: sourcesCount
-      }
-    });
-    
-  } catch (error) {
-    console.error('手动爬取失败:', error.message);
-    res.status(500).json({
-      code: 500,
-      message: '爬取任务失败',
-      error: error.message
-    });
-  }
+  console.log('⚠️ /api/crawler/trigger 已禁用（仅保留 JRKAN 实时抓取）');
+  res.status(410).json({
+    code: 410,
+    message: '手动触发接口已禁用，全部数据实时来自 JRKAN'
+  });
 });
 
 // 获取爬虫日志
@@ -143,21 +108,22 @@ router.post('/cleanup', async (req, res) => {
       [days]
     );
     
-    // 删除已结束且无信号源的比赛
-    const [matchResult] = await pool.execute(`
-      DELETE m FROM matches m
-      LEFT JOIN live_sources ls ON m.id = ls.match_id
+    // SEO优化：不再删除历史比赛，保留所有比赛用于SEO
+    // 只清理无用的信号源数据，保留比赛记录
+    const [sourceResult] = await pool.execute(`
+      DELETE ls FROM live_sources ls
+      INNER JOIN matches m ON ls.match_id = m.id
       WHERE m.status = 'finished' 
       AND m.created_at < DATE_SUB(NOW(), INTERVAL ? DAY)
-      AND ls.id IS NULL
     `, [days]);
     
     res.json({
       code: 200,
-      message: '清理完成',
+      message: '清理完成（已保留历史比赛用于SEO）',
       data: {
         deletedLogs: logResult.affectedRows,
-        deletedMatches: matchResult.affectedRows
+        deletedSources: sourceResult.affectedRows,
+        note: '历史比赛已保留，用于SEO优化'
       }
     });
     

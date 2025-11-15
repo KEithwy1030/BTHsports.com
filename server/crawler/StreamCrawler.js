@@ -123,6 +123,8 @@ class StreamCrawler {
 
   // 爬取popozhibo平台比赛列表
   async crawlPopozhiboMatches() {
+    console.log('⚠️ popozhibo 数据源已禁用，直接返回空结果');
+    return [];
     try {
       // 检查缓存
       const now = Date.now();
@@ -692,6 +694,8 @@ class StreamCrawler {
 
   // 基于popozhibo规律生成可能的信号源URL（智能验证版本）
   async generatePopozhiboSources(popozhiboId) {
+    console.log('⚠️ popozhibo 信号源生成功能已禁用');
+    return [];
     try {
       console.log(`🔍 深度解析播放器页面获取真实流...`);
       
@@ -773,6 +777,8 @@ class StreamCrawler {
 
   // 原有方法重命名：规律生成备用信号源
   async generatePopozhiboSourcesFallback(popozhiboId) {
+    console.log('⚠️ popozhibo 信号源兜底已禁用');
+    return [];
     try {
       console.log(`🔍 基于规律为popozhibo ID ${popozhiboId} 生成并验证信号源...`);
       const sources = [];
@@ -870,6 +876,7 @@ class StreamCrawler {
 
   // 将popozhibo ID转换为JRKAN ID
   convertToJrkanId(popozhiboId, matchId) {
+    return null;
     // 基于观察到的规律进行转换
     // steam800511.html 对应布伦特福德vs曼城 (比赛ID 200006)
     // 需要找到popozhibo ID与JRKAN ID的对应关系
@@ -1006,6 +1013,8 @@ class StreamCrawler {
 
   // 从popozhibo播放页面抓取真实信号源
   async crawlPopozhiboRealSources(popozhiboId) {
+    console.log('⚠️ popozhibo 播放页抓取已禁用');
+    return [];
     try {
       console.log(`🔍 开始从popozhibo播放页面抓取信号源: ${popozhiboId}`);
       const url = `http://www.popozhibo.xyz/live/${popozhiboId}/play`;
@@ -1191,6 +1200,8 @@ class StreamCrawler {
 
   // 从popozhibo获取真实直播流（云环境已禁用）
   async crawlPopozhiboRealStreams(matchId) {
+    console.log('⚠️ popozhibo 真实直播流抓取已禁用');
+    return [];
     if (!this.isBrowserEnabled()) {
       console.warn('⚠️ 浏览器自动化功能已禁用（云环境不支持），跳过popozhibo浏览器爬取');
       return [];
@@ -1352,6 +1363,8 @@ class StreamCrawler {
 
   // 获取比赛信息
   async getMatchInfo(matchId) {
+    console.log('⚠️ getMatchInfo 已禁用 popozhibo 来源，返回 null');
+    return null;
     try {
       // 简化版本：直接从爬虫获取，不使用缓存
       
@@ -1632,6 +1645,13 @@ class StreamCrawler {
 
   // 爬取比赛详情信息（队伍名称、联赛等）
   async crawlMatchDetail(matchId) {
+    console.log('⚠️ crawlMatchDetail 已禁用 popozhibo 来源，返回默认数据');
+    return {
+      homeTeam: '主队',
+      awayTeam: '客队',
+      league: '未知联赛',
+      matchTitle: ''
+    };
     try {
       const response = await axios.get(`http://www.popozhibo.xyz/live/${matchId}/play`, {
         headers: {
@@ -2177,6 +2197,8 @@ class JRS80DataDecryptor {
 // popozhibo数据解析器
 class PopozhiboDataParser {
   async parseMatches() {
+    console.log('⚠️ PopozhiboDataParser 已禁用');
+    return [];
     try {
       console.log('🔍 开始从popozhibo解析比赛数据...');
       
@@ -2319,6 +2341,8 @@ class SmartStreamSourceFetcher {
   }
   
   async getPopozhiboSources(matchId, matchInfo) {
+    console.log('⚠️ SmartStreamSourceFetcher.getPopozhiboSources 已禁用');
+    return [];
     const possibleUrls = [
       `http://play.jgdhds.com/play/gm.php?id=${matchId}&id2=${matchId}`,
       `http://play.jgdhds.com/play/kbs.html?id=${matchId}&id2=`,

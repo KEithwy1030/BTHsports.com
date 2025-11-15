@@ -7,9 +7,26 @@ npm-debug.log
 .gitignore
 .DS_Store
 Thumbs.db
-dist
+# 开发环境文件
+env.dev
+.env.local
+# 构建产物（会在 Dockerfile 中重新构建）
 client/dist
-server/logs
+dist
+# Docker 相关（本地测试用，不包含在镜像中）
 docker-compose.yml
 docker-compose.override.yml
-
+docker-compose.prod.yml
+# 注意：Dockerfile 需要保留，Zeabur 部署时需要
+# 文档
+*.md
+!README.md
+# 测试文件
+**/*.test.js
+**/*.spec.js
+# IDE 配置
+.vscode
+.idea
+# 日志目录
+server/logs
+*.log

@@ -58,10 +58,12 @@ mysql -h <DB_HOST> -u <DB_USER> -p <DB_NAME> < server/config/schema.sql
    - 其他配置使用默认值即可
 
 4. **部署**
-   - Zeabur 会自动执行：
-     - `npm install`（安装依赖）
-     - `npm run build:client`（构建前端）
-     - `npm start`（启动服务）
+   - 默认情况下 Zeabur 会检测根目录下的 `Dockerfile`，以单服务方式构建并同时运行前后端。
+   - 如需在 Zeabur 上拆分为“前端 + 后端 + MySQL(+Redis)”多服务，请在部署设置中选择 `docker-compose.zeabur.yml` 作为 Compose 文件。该文件会分别构建：
+     - `backend`：使用 `Dockerfile.backend`，仅运行 `server/` API；
+     - `frontend`：使用 `client/Dockerfile.frontend`，以静态站点方式托管 `client/dist`；
+     - `mysql` / `redis`：可选的内置服务（如使用 Zeabur 托管数据库，可删除并改用官方 Add-on）。
+   - **重要**：如果选择 Compose 方案，请确保在 Zeabur 控制台中关闭默认的单服务构建，改为 “Use docker-compose file” 并填写 `docker-compose.zeabur.yml`。
 
 5. **初始化数据库**
    - 部署完成后，连接到数据库执行 `schema.sql`

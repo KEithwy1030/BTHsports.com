@@ -1,0 +1,27 @@
+FROM node:20-alpine AS deps
+WORKDIR /app
+
+# 仅安装根目录依赖（包含后端和构建脚本）
+COPY package*.json ./
+RUN npm install --omit=dev
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+# 拷贝依赖
+COPY --from=deps /app/node_modules ./node_modules
+COPY package*.json ./
+
+# 拷贝后端代码与必要资源
+COPY server ./server
+COPY public ./public
+COPY client ./client
+
+ENV NODE_ENV=production
+ENV PORT=7001
+ENV SKIP_PREBUILD=true
+
+EXPOSE 7001
+
+CMD ["node", "server/index.js"]
+
